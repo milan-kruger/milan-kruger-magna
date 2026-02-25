@@ -1,5 +1,21 @@
 # **Trafman Transgressions**
 
+# GitHub Pages Deployment
+
+This project is configured for automated deployment to GitHub Pages.
+
+## Setup Instructions
+1. Go to your GitHub repository settings
+2. Navigate to **Settings** → **Pages**
+3. Under **Build and deployment**, select:
+   - **Source**: GitHub Actions
+4. Push to the `main` or `master` branch to trigger automatic deployment
+
+The site will be available at: `https://<your-username>.github.io/milan-kruger-magna/`
+
+## Manual Deployment
+You can also manually trigger deployment from the **Actions** tab in your GitHub repository.
+
 # Development
 
 ## Requirements

@@ -2,6 +2,7 @@
 
 #build & dist
 /build
+/dist
 
 # dependencies
 /node_modules
