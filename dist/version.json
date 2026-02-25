@@ -1,0 +1,10 @@
+{
+    "version": "3.0.2-SNAPSHOT",
+    "git": {
+        "branch": "main",
+        "latestCommit": "8f0b72c0058674f9194bc1113576b2f6819ed944",
+        "shortHash": "8f0b72c",
+        "message": "init",
+        "date": "2026-02-25T16:36:46+02:00"
+    }
+}

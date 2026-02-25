@@ -1,0 +1,81 @@
+{
+  "trafmanPwaLaunchFileName": "launch.trafman",
+  "id": "trafman-transgressions",
+  "name": "Trafman Transgressions",
+  "short_name": "TM Transgressions",
+  "description": "The Trafman Transgressions subsystem.",
+  "start_url": "/transgressions/",
+  "scope": "/transgressions/",
+  "display": "standalone",
+  "launch_handler": {
+    "client_mode": [
+      "focus-existing",
+      "auto"
+    ]
+  },
+  "background_color": "#555",
+  "theme_color": "#777",
+  "icons": [
+    {
+      "src": "/transgressions/pwa/192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/transgressions/pwa/512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/transgressions/pwa/intro-small.png",
+      "sizes": "480x320",
+      "type": "image/png",
+      "label": "Trafman Subsystem"
+    },
+    {
+      "src": "/transgressions/pwa/intro-large.png",
+      "sizes": "768x512",
+      "type": "image/png",
+      "label": "Trafman Subsystem",
+      "form_factor": "wide"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Profile",
+      "description": "Open the User Profile page.",
+      "icons": [
+        {
+          "src": "/transgressions/pwa/96.png",
+          "type": "image/png",
+          "sizes": "96x96"
+        }
+      ],
+      "url": "/transgressions/profile"
+    },
+    {
+      "name": "Transgressions",
+      "description": "Open the Transgressions page.",
+      "icons": [
+        {
+          "src": "/transgressions/pwa/96.png",
+          "type": "image/png",
+          "sizes": "96x96"
+        }
+      ],
+      "url": "/transgressions/transgressions"
+    }
+  ],
+  "file_handlers": [
+    {
+      "accept": {
+        "application/x-trafman": [
+          ".trafman"
+        ]
+      },
+      "action": "/transgressions/"
+    }
+  ]
+}

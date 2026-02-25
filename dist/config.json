@@ -1,0 +1,63 @@
+{
+  "devMode": true,
+  "warningTime": 60000,
+  "environment": "DEV",
+  "clientName": {
+    "en": "Magna BC",
+    "af": "Magna BK"
+  },
+  "apiBaseUrl": {
+    "transgressions": "http://localhost:8001/transgressions-be",
+    "core": "http://localhost:9001/core-be",
+    "weigh": "http://localhost:9101/weigh-be",
+    "contentStore": "http://localhost:9301/contentstore-be"
+  },
+  "jasperUrl": "http://localhost:8082/jasperserver/flow.html?_flowId=searchFlow",
+  "subsystem": {
+    "currentApp": "transgressions",
+    "apps": {
+      "portal": "http://localhost:7080/",
+      "core": "http://localhost:9080/core",
+      "reports": "http://localhost:8082/jasperserver/flow.html?_flowId=searchFlow",
+      "weigh": "http://localhost:8080/weigh",
+      "transgressions": "http://localhost:3000/transgressions"
+    }
+  },
+  "tenancy": {
+    "organisation": "trafman",
+    "tenant": "W001",
+    "coreTenant": "C001",
+    "tenants": {
+      "C001": "http://localhost:3000",
+      "W001": "http://localhost:3000"
+    },
+    "hideTenancySelector": true
+  },
+  "theme": {
+    "fischerTheme": {
+      "primary": "#03826B",
+      "secondary": "#0F7B9F"
+    },
+    "magnaTheme": {
+      "primary": "#DA6A07",
+      "secondary": "#2A68C3"
+    },
+    "primary": "#DA6A07",
+    "secondary": "#2A68C3",
+    "success": "#31A000",
+    "error": "#EB0C04",
+    "warning": "#F05105",
+    "info": "#029ABD",
+    "scrollbar": "#FF851A"
+  },
+  "dateTime": {
+    "ampmClock": false,
+    "dateFormat": "DD/MM/YYYY",
+    "timeFormat": "HH:mm:ss",
+    "dateTimeSecondsFormat": "DD/MM/YYYY HH:mm:ss",
+    "dateTimeFormat": "DD/MM/YYYY HH:mm"
+  },
+  "weighbridge": {
+    "id": "f25ddc50-e564-3e0b-9c13-7908ccca2cf9"
+  }
+}
