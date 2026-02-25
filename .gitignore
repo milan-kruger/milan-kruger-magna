@@ -2,7 +2,6 @@
 
 #build & dist
 /build
-/dist
 
 # dependencies
 /node_modules
@@ -22,7 +21,6 @@ yarn-error.log*
 # Licenses Information
 licenses-summary.txt
 licenses.csv
-package-lock.json
 transgressions-fe.code-workspace
 
 .idea/
