@@ -1,0 +1,108 @@
+version: "3.7"
+
+# *** COMMANDS ***
+#    BUILD: docker-compose --profile build up
+#    START: docker-compose --profile run up -d
+#     STOP: docker-compose --profile run down
+#  DROP DB: docker volume rm react-template-example-fe
+
+# volumes:
+#   database:
+#     name: react-template-example-fe
+
+# *** USERS ***
+# u = MAINTAIN      p = M8!nta!n
+# u = VIEW          p = V!ew1234
+
+services:
+  # BUILD (REACT)
+  build:
+    container_name: example_build
+    build: ./_docker/build
+    profiles:
+      - build
+    volumes:
+      - ./:/trafman/source
+  # RUN (REACT)
+  react:
+    container_name: exampe_run_app
+    build: ./_docker/run
+    profiles:
+      - run
+    environment:
+      - TZ=Africa/Johannesburg
+    volumes:
+      - ./build:/usr/share/nginx/html
+    ports:
+      - 3000:80
+
+  # TODO: Eventually also run the backend (from pre-built images - once that is implemented)
+
+  # # RUN (POSTGRESQL)
+  # postgresql:
+  #   container_name: template_db
+  #   image: postgres:15.3-alpine3.18
+  #   profiles:
+  #     - run
+  #   ports:
+  #     - 5432:5432
+  #   environment:
+  #     - TZ=Africa/Johannesburg
+  #     - POSTGRES_USER=magnabc
+  #     - POSTGRES_PASSWORD=Pass@100
+  #     - POSTGRES_DB=data
+  #   volumes:
+  #     - database:/var/lib/postgresql/data
+  #     - ./_docker/docker-postgres-init.sql:/docker-entrypoint-initdb.d/docker-postgres-init.sql
+  #   healthcheck:
+  #     test: pg_isready -q -d data -U magnabc
+  #     interval: 10s
+  #     timeout: 10s
+  #     retries: 10
+  #     start_period: 30s
+  # # RUN (KEYCLOAK)
+  # keycloak:
+  #   container_name: template_kc
+  #   image: jboss/keycloak:16.1.1
+  #   profiles:
+  #     - run
+  #   environment:
+  #     - TZ=Africa/Johannesburg
+  #     - KEYCLOAK_USER=admin
+  #     - KEYCLOAK_PASSWORD=Tr8fm8n!
+  #     # - KEYCLOAK_FRONTEND_URL=http://keycloak:8080/auth/realms/trafman
+  #     - KEYCLOAK_IMPORT=/tmp/realm-export.json
+  #     - DB_ADDR=postgresql
+  #     - DB_PORT=5432
+  #     - DB_VENDOR=POSTGRES
+  #     # TODO: Make Keycloak run in it's own DB
+  #     - DB_DATABASE=data?currentSchema=keycloak
+  #     - DB_USER=magnabc
+  #     - DB_PASSWORD=Pass@100
+  #   depends_on:
+  #     postgresql:
+  #       condition: service_healthy
+  #   ports:
+  #     # ADMIN UI: http://localhost:8085/auth/admin/
+  #     # USER UI : http://localhost:8085/auth/realms/trafman/account
+  #     - 8085:8080
+  #   volumes:
+  #     - ./_docker/realm-export.json:/tmp/realm-export.json
+  # # RUN (JAVA)
+  # spring:
+  #   container_name: template_app
+  #   build: ./_docker/run
+  #   profiles:
+  #     - run
+  #   depends_on:
+  #     postgresql:
+  #       condition: service_healthy
+  #     # TODO: Make this wait for Keycloak to fully start
+  #     keycloak:
+  #       condition: service_started
+  #   environment:
+  #     - TZ=Africa/Johannesburg
+  #   volumes:
+  #     - ./application/target/:/trafman/app
+  #   ports:
+  #     - 8001:8001

@@ -1,0 +1,7 @@
+.react-pdf__Page__textContent.textLayer {
+    display: none;
+  }
+  .react-pdf__Page__annotations.annotationLayer {
+    display: none;
+  }
+  

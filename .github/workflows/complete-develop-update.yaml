@@ -1,0 +1,58 @@
+name: Complete Develop Update
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - develop
+
+jobs:
+  auto_update_version:
+    name: Auto Update Develop Version
+    # Only run when a post-release conflict resolution PR is merged
+    if: |
+      github.event.pull_request.merged == true &&
+      (contains(github.event.pull_request.title, '[Post-Release] Resolve Conflicts') ||
+       contains(github.event.pull_request.labels.*.name, 'post-release'))
+    uses: MagnaBC/trafman-devops/.github/workflows/reusable-auto-update-develop.yaml@master
+    with:
+      develop_branch: 'develop'
+      master_branch: ${{ github.event.pull_request.base.ref }}
+    secrets:
+      MAGNABOT_GH_TOKEN: ${{ secrets.MAGNABOT_GH_TOKEN }}
+
+  summary:
+    name: Develop Update Summary
+    needs: auto_update_version
+    # Always run summary, even if version wasn't updated
+    if: always() && needs.auto_update_version.result == 'success'
+    runs-on: trafman
+    steps:
+      - name: Display Summary
+        run: |
+          echo "## ✅ Develop Branch Updated!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Update Information" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch**: develop" >> $GITHUB_STEP_SUMMARY
+          echo "- **PR**: #${{ github.event.pull_request.number }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered By**: Post-release conflict resolution" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ needs.auto_update_version.outputs.version_updated }}" == "true" ]; then
+            echo "### Actions Completed" >> $GITHUB_STEP_SUMMARY
+            echo "✅ Conflicts resolved and merged" >> $GITHUB_STEP_SUMMARY
+            echo "✅ Develop version updated to: **${{ needs.auto_update_version.outputs.next_snapshot }}**" >> $GITHUB_STEP_SUMMARY
+            echo "✅ Changes committed and pushed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### Actions Completed" >> $GITHUB_STEP_SUMMARY
+            echo "✅ Conflicts resolved and merged" >> $GITHUB_STEP_SUMMARY
+            echo "ℹ️  Version was already up to date: **${{ needs.auto_update_version.outputs.next_snapshot }}**" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "1. 🔍 Verify develop branch is at correct version" >> $GITHUB_STEP_SUMMARY
+          echo "2. 🚀 Continue development work on develop branch" >> $GITHUB_STEP_SUMMARY
+          echo "3. 🧪 Run tests to ensure everything works" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🎉 **Release cycle complete! Ready for next development iteration.**" >> $GITHUB_STEP_SUMMARY

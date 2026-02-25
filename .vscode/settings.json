@@ -1,0 +1,39 @@
+{
+    "files.trimTrailingWhitespace": true,
+    "cSpell.words": [
+        "ampm",
+        "brakwater",
+        "codegen",
+        "endadornment",
+        "finalise",
+        "fontsource",
+        "initialise",
+        "isupdateonweigh",
+        "languagedetector",
+        "magnabc",
+        "openapi",
+        "organisation",
+        "organisations",
+        "overscan",
+        "pageable",
+        "reduxjs",
+        "roboto",
+        "showtooltippopup",
+        "Swipeable",
+        "testid",
+        "trafman"
+    ],
+    "jest.autoRun": "off",
+    "sonarlint.connectedMode.project": {
+        "connectionId": "https-sonarqube-devops-africa",
+        "projectKey": "MagnaBC_Trafman-Transgressions-FE_eb9f6a02-e821-47d4-9ea8-7241bc8128df"
+    },
+    "trailing-spaces.deleteModifiedLinesOnly": false,
+    "trailing-spaces.highlightCurrentLine": false,
+    "trailing-spaces.trimOnSave": true,
+    "files.insertFinalNewline": true,
+    "files.trimFinalNewlines": true,
+    "files.eol": "\n",
+    "editor.formatOnPaste": false,
+    "editor.formatOnSave": false
+}

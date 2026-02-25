@@ -1,0 +1,735 @@
+import { Dialog, DialogActions, DialogContent, DialogTitle, Grid2 as Grid, InputAdornment, Stack, SxProps, Theme, useTheme } from "@mui/material";
+import React, { memo, useCallback, useMemo } from "react";
+import { useTranslation } from "react-i18next";
+import { toCamelCaseWords } from "../../../framework/utils";
+import TmButton from "../../../framework/components/button/TmButton";
+import CancelIcon from "@mui/icons-material/Cancel";
+import CheckIcon from "@mui/icons-material/Check";
+import TmTextField from "../../../framework/components/textfield/TmTextField";
+import TmNumberField from "../../../framework/components/textfield/TmNumberField";
+import { ChargeType } from "../../enum/ChargeType";
+import TmTypography from "../../../framework/components/typography/TmTypography";
+
+type ChargeTypeDialogProps = {
+    testId: string;
+    isOpen: boolean;
+    onConfirm: () => void;
+    handleCloseDialog: () => void;
+    chargeType?: string;
+    numberOfLamps?: number;
+    vehicleHeight?: number;
+    allowedHeight?: number;
+    roadTravelledOn?: string;
+    numberOfTyres?: number;
+    vehicleLength?: number;
+    numberOfPersons?: number;
+    numberOfPanels?: number;
+    setNumberOfPersons: (value: number | undefined) => void;
+    setVehicleLength: (length: number | undefined) => void;
+    setNumberOfTyres: (value: number | undefined) => void;
+    setNumberOfLamps: (value: number | undefined) => void;
+    setVehicleHeight: (height: number | undefined) => void;
+    setAllowedHeight: (height: number | undefined) => void;
+    setRoadTravelledOn: (road: string | undefined) => void;
+    setNumberOfPanels: (value: number | undefined) => void;
+}
+
+const ChargeTypeDialog = ({ testId, isOpen, onConfirm, handleCloseDialog, chargeType, numberOfLamps,
+    vehicleHeight, allowedHeight, roadTravelledOn, numberOfTyres, vehicleLength, numberOfPersons, numberOfPanels, setVehicleLength,
+    setNumberOfLamps, setVehicleHeight, setAllowedHeight, setRoadTravelledOn, setNumberOfTyres, setNumberOfPersons, setNumberOfPanels }: ChargeTypeDialogProps) => {
+    const theme = useTheme();
+    const { t } = useTranslation();
+
+    const createNumberChangeHandler = useCallback((setter: (value: number) => void) => {
+        return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+            setter(Number(e.target.value));
+        };
+    }, []);
+
+    const createStringChangeHandler = useCallback((setter: (value: string) => void) => {
+        return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+            setter(e.target.value);
+        };
+    }, []);
+
+    const createNumberValueHandler = useCallback((setter: (value: number) => void) => {
+        return (value: number) => {
+            setter(value);
+        };
+    }, []);
+
+    // For TmTextField
+    const onChangeVehicleHeight = createNumberChangeHandler(setVehicleHeight);
+    const onChangeAllowedHeight = createNumberChangeHandler(setAllowedHeight);
+    const onChangeRoadTravelledOn = createStringChangeHandler(setRoadTravelledOn);
+
+    // For TmNumberField
+    const onChangeLamps = createNumberValueHandler(setNumberOfLamps);
+    const onChangeTyres = createNumberValueHandler(setNumberOfTyres);
+    const onChangeNumberOfPersons = createNumberValueHandler(setNumberOfPersons);
+    const onChangeNumberOfPanels = createNumberValueHandler(setNumberOfPanels);
+
+
+    const onChangeVehicleLength = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        const raw = e.target.value;
+
+        // 1) Strip anything that's not a digit or dot
+        let cleaned = raw.replace(/[^0-9.]/g, '');
+
+        // 2) Allow only ONE dot: remove subsequent dots
+        cleaned = cleaned.replace(/(\..*)\./g, '$1');
+
+        // 3) Ensure only one digit after the dot: remove extra digits after the first one
+        if (cleaned.includes('.')) {
+            const [integer, decimal] = cleaned.split('.');
+            cleaned = `${integer}.${decimal.substring(0, 1)}`;
+        }
+
+        // Update the state with the cleaned value
+        setVehicleLength(cleaned as unknown as number);
+    };
+
+    const style: SxProps<Theme> = {
+        padding: '15px 15px 15px 0'
+    };
+
+    const styleHeightFields: SxProps<Theme> = {
+        paddingRight: '10px',
+        width: '25%',
+        fontWeight: '400',
+    };
+
+    // Validation function to check if all required fields are filled
+    const isFormValid = useMemo(() => {
+        if (!chargeType) return true;
+
+        // Check for single charge types
+        if (chargeType === ChargeType.HEIGHT) {
+            return vehicleHeight !== undefined && vehicleHeight > 0 &&
+                allowedHeight !== undefined && allowedHeight > 0 &&
+                (vehicleHeight && allowedHeight) !== 0 && allowedHeight < vehicleHeight;
+        }
+        if (chargeType === ChargeType.LAMP) {
+            return numberOfLamps !== undefined && numberOfLamps > 0;
+        }
+        if (chargeType === ChargeType.ROAD) {
+            return roadTravelledOn !== undefined && roadTravelledOn !== '';
+        }
+        if (chargeType === ChargeType.TYRE) {
+            return numberOfTyres !== undefined && numberOfTyres > 0;
+        }
+        if (chargeType === ChargeType.LENGTH) {
+            return vehicleLength !== undefined && vehicleLength > 0;
+        }
+        if (chargeType === ChargeType.PANEL) {
+            return numberOfPanels !== undefined && numberOfPanels > 0;
+        }
+        if (chargeType === ChargeType.PERSON) {
+            return numberOfPersons !== undefined && numberOfPersons > 0;
+        }
+
+        // Check for combination charge types
+        if (chargeType.includes('_')) {
+            const types = chargeType.split('_');
+            return types.every(type => {
+                switch (type) {
+                    case ChargeType.HEIGHT:
+                        return vehicleHeight !== undefined && vehicleHeight > 0 &&
+                            allowedHeight !== undefined && allowedHeight > 0;
+                    case ChargeType.LAMP:
+                        return numberOfLamps !== undefined && numberOfLamps > 0;
+                    case ChargeType.ROAD:
+                        return roadTravelledOn !== undefined && roadTravelledOn !== '';
+                    case ChargeType.TYRE:
+                        return numberOfTyres !== undefined && numberOfTyres > 0;
+                    case ChargeType.LENGTH:
+                        return vehicleLength !== undefined && vehicleLength > 0;
+                    case ChargeType.PANEL:
+                        return numberOfPanels !== undefined && numberOfPanels > 0;
+                    case ChargeType.PERSON:
+                        return numberOfPersons !== undefined && numberOfPersons > 0;
+                    default:
+                        return true;
+                }
+            });
+        }
+
+        return true;
+    }, [chargeType, vehicleHeight, allowedHeight, numberOfLamps, roadTravelledOn,
+        numberOfTyres, vehicleLength, numberOfPanels, numberOfPersons]);
+
+    return (
+        <Dialog
+            id={toCamelCaseWords(testId, 'chargeType')}
+            open={isOpen}
+            onClose={handleCloseDialog}>
+            <DialogTitle
+                id={toCamelCaseWords(testId, 'chargeType')}
+                style={{ color: theme.palette.primary.main, fontWeight: 500, fontSize: '1.5rem' }}>
+                {t('chargeDetails')}
+            </DialogTitle>
+
+            <DialogContent>
+                {chargeType === ChargeType.HEIGHT &&
+                    <Grid container gap={1} alignItems={"end"}>
+                        <Grid size={{ xs: 12, sm: 12, md: 12, lg: 12 }} paddingBottom={2}>
+                            <Stack direction={"row"} alignItems={"center"}>
+                                <TmTypography
+                                    sx={styleHeightFields}
+                                    testid={toCamelCaseWords("chargeDetails", "vehicleHeight")}
+                                >
+                                    {t("vehicleHeightLabel")} <span>*</span>
+                                </TmTypography>
+                                <TmTextField
+                                    testid={'vehicleHeight'}
+                                    value={vehicleHeight}
+                                    onChange={onChangeVehicleHeight}
+                                    disabled={false}
+                                    required={true}
+                                    error={!vehicleHeight || vehicleHeight <= 0}
+                                    sx={{
+                                        width: '50%',
+                                        height: '100%',
+                                        '& .MuiInputBase-input.MuiOutlinedInput-input': {
+                                            padding: '0px 20px 0px 0px !important'
+                                        }
+                                    }}
+                                    slotProps={{
+                                        input: {
+                                            inputMode: 'numeric',
+                                            // pattern: '[0-9]*'
+                                        }
+                                    }}
+                                    endadornment={(
+                                        <InputAdornment position="end" style={{ textTransform: 'lowercase' }}>mm</InputAdornment>
+                                    )}
+                                />
+                            </Stack>
+                        </Grid>
+
+                        <Grid size={{ xs: 12, sm: 12, md: 12, lg: 12 }} paddingBottom={2}>
+                            <Stack direction={"row"}>
+                                <TmTypography
+                                    sx={styleHeightFields}
+                                    testid={toCamelCaseWords("chargeDetails", "allowedHeight")}
+                                >
+                                    {t("allowedHeightLabel")} <span>*</span>
+                                </TmTypography>
+                                <TmTextField
+                                    testid={'allowedHeight'}
+                                    value={allowedHeight}
+                                    onChange={onChangeAllowedHeight}
+                                    disabled={false}
+                                    required={true}
+                                    error={!allowedHeight || allowedHeight <= 0 || (vehicleHeight !== undefined && allowedHeight >= vehicleHeight)}
+                                    helperText={(vehicleHeight !== undefined && allowedHeight !== undefined && (allowedHeight && vehicleHeight) !== 0 && allowedHeight >= vehicleHeight) ? t('allowedHeightValidationMessage') : ''}
+                                    sx={{
+                                        width: '50%',
+                                        height: '100%',
+                                        '& .MuiInputBase-input.MuiOutlinedInput-input': {
+                                            padding: '0px 20px 0px 0px !important'
+                                        }
+                                    }}
+                                    slotProps={{
+                                        input: {
+                                            inputMode: 'numeric',
+                                            // pattern: '[0-9]*'
+                                        }
+                                    }}
+                                    endadornment={(
+                                        <InputAdornment position="end" style={{ textTransform: 'lowercase' }}>mm</InputAdornment>
+                                    )}
+                                />
+                            </Stack>
+                        </Grid>
+
+                        <Grid size={{ xs: 12, sm: 12, md: 10, lg: 10 }} paddingBottom={2}
+                            sx={{ width: '100%', borderTop: '2px solid #ccc', paddingTop: '10px' }}>
+                            <Stack direction={"row"} alignItems={"center"}>
+                                <TmTypography
+                                    sx={styleHeightFields}
+                                    testid={toCamelCaseWords("chargeDetails", "overHeight")}
+                                >
+                                    {t("overHeightLabel")}
+                                </TmTypography>
+                                <Stack direction="row" sx={{ position: 'relative', width: '66%' }}>
+                                    <TmTypography
+                                        sx={{ width: 120, paddingLeft: '1.5rem' }}
+                                        testid={toCamelCaseWords("chargeDetails", "overHeightValue")}
+                                    >
+                                        {(vehicleHeight !== undefined && allowedHeight !== undefined && (allowedHeight && vehicleHeight) !== 0
+                                            ? vehicleHeight - allowedHeight
+                                            : null)}
+                                    </TmTypography>
+                                    <TmTypography
+                                        testid="lengthUnit"
+                                        sx={{
+                                            position: 'absolute',
+                                            right: '8px',
+                                            top: '50%',
+                                            transform: 'translateY(-50%)',
+                                            pointerEvents: 'none',
+                                            color: 'text.secondary'
+                                        }}
+                                    >
+                                        mm
+                                    </TmTypography>
+                                </Stack>
+                            </Stack>
+                        </Grid>
+
+                    </Grid>
+                }
+
+                {chargeType === ChargeType.LAMP &&
+                    <Grid size={{ xs: 12, sm: 12, md: 12, lg: 12 }} paddingBottom={2}>
+                        <Stack direction={"row"} alignItems={"center"}>
+                            <TmTypography
+                                fontWeight="500"
+                                testid={''}
+                                sx={style}
+                            >
+                                {t("numberOfLamps")} <span>*</span>
+                            </TmTypography>
+                            <TmNumberField
+                                testid={'numberOfLamps'}
+                                value={numberOfLamps}
+                                label={t("")}
+                                required={true}
+                                error={!numberOfLamps || numberOfLamps <= 0}
+                                sx={{
+                                    width: '20%',
+                                    '& .MuiInputBase-input.MuiOutlinedInput-input': {
+                                        padding: '8px !important'
+                                    }
+                                }}
+                                onChange={setNumberOfLamps}
+                                disabled={false}
+                            ></TmNumberField>
+                        </Stack>
+                    </Grid>
+                }
+
+                {chargeType === ChargeType.ROAD &&
+                    <Grid size={{ xs: 12, sm: 12, md: 12, lg: 12 }} paddingBottom={2}>
+                        <Stack direction={"row"} alignItems={"center"}>
+                            <TmTypography
+                                fontWeight="500"
+                                testid={''}
+                                sx={style}
+                            >
+                                {t("roadTravelledOn")} <span>*</span>
+                            </TmTypography>
+                            <TmTextField
+                                testid={'roadTravelledOn'}
+                                value={roadTravelledOn}
+                                onChange={onChangeRoadTravelledOn}
+                                disabled={false}
+                                required={true}
+                                error={!roadTravelledOn || roadTravelledOn === ''}
+                                sx={{
+                                    width: 120,
+                                }}
+                                inputProps={{
+                                    inputMode: 'numeric',
+                                    pattern: '[0-9]*'
+                                }}
+                            />
+                        </Stack>
+                    </Grid>
+                }
+
+                {chargeType === ChargeType.TYRE &&
+                    <Grid size={{ xs: 12, sm: 12, md: 12, lg: 12 }} paddingBottom={2}>
+                        <Stack direction={"row"} alignItems={"center"}>
+                            <TmTypography
+                                fontWeight="500"
+                                testid={''}
+                                sx={style}
+                            >
+                                {t("numberOfTyres")} <span>*</span>
+                            </TmTypography>
+                            <TmNumberField
+                                testid={'numberOfTyres'}
+                                value={numberOfTyres}
+                                label={t("")}
+                                required={true}
+                                error={!numberOfTyres || numberOfTyres <= 0}
+                                sx={{
+                                    width: '20%',
+                                    height: '100%',
+                                    '& .MuiInputBase-input.MuiOutlinedInput-input': {
+                                        padding: '8px !important'
+                                    }
+                                }}
+                                onChange={onChangeTyres}
+                                disabled={false}
+                            ></TmNumberField>
+                        </Stack>
+                    </Grid>
+                }
+
+                {chargeType === ChargeType.LENGTH &&
+                    <Grid size={{ xs: 12, sm: 12, md: 12, lg: 12 }} paddingBottom={2}>
+                        <Stack direction={"row"} alignItems={"center"}>
+                            <TmTypography
+                                fontWeight="500"
+                                testid={''}
+                                sx={style}
+                            >
+                                {t("lengthOfVehicle")} <span>*</span>
+                            </TmTypography>
+                            <TmTextField
+                                testid={'lengthOfVehicle'}
+                                value={vehicleLength}
+                                onChange={onChangeVehicleLength}
+                                disabled={false}
+                                required={true}
+                                error={!vehicleLength || vehicleLength <= 0}
+                                sx={{
+                                    width: '50%',
+                                    height: '100%',
+                                    '& .MuiInputBase-input.MuiOutlinedInput-input': {
+                                        padding: '0px 20px 0px 0px !important'
+                                    }
+                                }}
+                                slotProps={{
+                                    input: {
+                                        inputMode: 'decimal',
+                                        inputProps: {
+                                            // HTML validation: only numbers with one decimal place
+                                            pattern: '^\\d*(\\.\\d{0,1})?$',
+                                        },
+                                    },
+                                }}
+                                endadornment={(
+                                    <InputAdornment position="end" style={{ textTransform: 'lowercase' }}>m</InputAdornment>
+                                )}
+                            />
+                        </Stack>
+                    </Grid>
+                }
+
+                {chargeType === ChargeType.PERSON &&
+                    <Grid size={{ xs: 12, sm: 12, md: 12, lg: 12 }} paddingBottom={2}>
+                        <Stack direction={"row"} alignItems={"center"}>
+                            <TmTypography
+                                fontWeight="500"
+                                testid={''}
+                                sx={style}
+                            >
+                                {t("numberOfPersons")} <span>*</span>
+                            </TmTypography>
+                            <TmNumberField
+                                testid={'numberOfPersons'}
+                                value={numberOfPersons}
+                                label={""}
+                                onChange={onChangeNumberOfPersons}
+                                disabled={false}
+                                required={true}
+                                error={!numberOfPersons || numberOfPersons <= 0}
+                                sx={{
+                                    width: '20%',
+                                    '& .MuiInputBase-input.MuiOutlinedInput-input': {
+                                        padding: '8px !important'
+                                    }
+                                }}
+                            ></TmNumberField>
+                        </Stack>
+                    </Grid>
+                }
+
+                {chargeType === ChargeType.PANEL &&
+                    <Grid size={{ xs: 12, sm: 12, md: 12, lg: 12 }} paddingBottom={2}>
+                        <Stack direction={"row"} alignItems={"center"}>
+                            <TmTypography
+                                fontWeight="500"
+                                testid={''}
+                                sx={style}
+                            >
+                                {t("numberOfPanels")} <span>*</span>
+                            </TmTypography>
+                            <TmNumberField
+                                testid={'numberOfPanels'}
+                                value={numberOfPanels}
+                                label={""}
+                                onChange={onChangeNumberOfPanels}
+                                disabled={false}
+                                required={true}
+                                error={!numberOfPanels || numberOfPanels <= 0}
+                                sx={{
+                                    width: '20%',
+                                    '& .MuiInputBase-input.MuiOutlinedInput-input': {
+                                        padding: '8px !important'
+                                    }
+                                }}
+                            ></TmNumberField>
+                        </Stack>
+                    </Grid>
+                }
+
+                {/* Handle combination charge types generically */}
+                {chargeType && chargeType.includes('_') && (() => {
+                    const types = chargeType.split('_');
+                    return (
+                        <Grid size={{ xs: 12, sm: 12, md: 12, lg: 12 }} paddingBottom={2}>
+                            {types.map((type) => {
+                                switch (type) {
+                                    case ChargeType.HEIGHT:
+                                        return (
+                                            <Grid key={type} container gap={1} alignItems={"end"}>
+                                                <Grid size={{ xs: 12, sm: 12, md: 12, lg: 12 }} paddingBottom={2}>
+                                                    <Stack direction={"row"} alignItems={"center"}>
+                                                        <TmTypography
+                                                            sx={styleHeightFields}
+                                                            testid={toCamelCaseWords("chargeDetails", "vehicleHeight")}
+                                                        >
+                                                            {t("vehicleHeightLabel")} <span>*</span>
+                                                        </TmTypography>
+                                                        <TmTextField
+                                                            testid={'vehicleHeight'}
+                                                            value={vehicleHeight}
+                                                            onChange={onChangeVehicleHeight}
+                                                            disabled={false}
+                                                            required={true}
+                                                            error={!vehicleHeight || vehicleHeight <= 0}
+                                                            sx={{
+                                                                width: 120,
+                                                            }}
+                                                            inputProps={{
+                                                                inputMode: 'numeric',
+                                                                pattern: '[0-9]*'
+                                                            }}
+                                                        />
+                                                    </Stack>
+                                                </Grid>
+                                                <Grid size={{ xs: 12, sm: 12, md: 12, lg: 12 }} paddingBottom={2}>
+                                                    <Stack direction={"row"} alignItems={"center"}>
+                                                        <TmTypography
+                                                            sx={styleHeightFields}
+                                                            testid={toCamelCaseWords("chargeDetails", "allowedHeight")}
+                                                        >
+                                                            {t("allowedHeightLabel")} <span>*</span>
+                                                        </TmTypography>
+                                                        <TmTextField
+                                                            testid={'allowedHeight'}
+                                                            value={allowedHeight}
+                                                            onChange={onChangeAllowedHeight}
+                                                            disabled={false}
+                                                            required={true}
+                                                            error={!allowedHeight || allowedHeight <= 0}
+                                                            sx={{
+                                                                width: 120
+                                                            }}
+                                                            inputProps={{
+                                                                inputMode: 'numeric',
+                                                                pattern: '[0-9]*'
+                                                            }}
+                                                        />
+                                                    </Stack>
+                                                </Grid>
+                                            </Grid>
+                                        );
+                                    case ChargeType.ROAD:
+                                        return (
+                                            <Stack key={type} direction={"row"} alignItems={"center"}>
+                                                <TmTypography
+                                                    fontWeight="500"
+                                                    testid={''}
+                                                    sx={style}
+                                                >
+                                                    {t("roadTravelledOn")} <span>*</span>
+                                                </TmTypography>
+                                                <TmTextField
+                                                    testid={'roadTravelledOn'}
+                                                    value={roadTravelledOn}
+                                                    onChange={onChangeRoadTravelledOn}
+                                                    disabled={false}
+                                                    required={true}
+                                                    error={!roadTravelledOn || roadTravelledOn === ''}
+                                                    sx={{
+                                                        width: '50%',
+                                                    }}
+                                                    inputProps={{
+                                                        inputMode: 'numeric',
+                                                        pattern: '[0-9]*'
+                                                    }}
+                                                />
+                                            </Stack>
+                                        );
+                                    case ChargeType.PANEL:
+                                        return (
+                                            <Stack key={type} direction={"row"} alignItems={"center"}>
+                                                <TmTypography
+                                                    fontWeight="500"
+                                                    testid={''}
+                                                    sx={style}
+                                                >
+                                                    {t("numberOfPanels")} <span>*</span>
+                                                </TmTypography>
+                                                <TmNumberField
+                                                    testid={'numberOfPanels'}
+                                                    value={numberOfPanels}
+                                                    label={""}
+                                                    onChange={onChangeNumberOfPanels}
+                                                    disabled={false}
+                                                    required={true}
+                                                    error={!numberOfPanels || numberOfPanels <= 0}
+                                                    sx={{
+                                                        width: '20%',
+                                                        '& .MuiInputBase-input.MuiOutlinedInput-input': {
+                                                            padding: '8px !important'
+                                                        }
+                                                    }}
+                                                ></TmNumberField>
+                                            </Stack>
+                                        );
+                                    case ChargeType.PERSON:
+                                        return (
+                                            <Stack key={type} direction={"row"} alignItems={"center"}>
+                                                <TmTypography
+                                                    fontWeight="500"
+                                                    testid={''}
+                                                    sx={style}
+                                                >
+                                                    {t("numberOfPersons")} <span>*</span>
+                                                </TmTypography>
+                                                <TmNumberField
+                                                    testid={'numberOfPersons'}
+                                                    value={numberOfPersons}
+                                                    label={""}
+                                                    onChange={onChangeNumberOfPersons}
+                                                    disabled={false}
+                                                    required={true}
+                                                    error={!numberOfPersons || numberOfPersons <= 0}
+                                                    sx={{
+                                                        width: '20%',
+                                                        '& .MuiInputBase-input.MuiOutlinedInput-input': {
+                                                            padding: '8px !important'
+                                                        }
+                                                    }}
+                                                ></TmNumberField>
+                                            </Stack>
+                                        );
+                                    case ChargeType.TYRE:
+                                        return (
+                                            <Stack key={type} direction={"row"} alignItems={"center"}>
+                                                <TmTypography
+                                                    fontWeight="500"
+                                                    testid={''}
+                                                    sx={style}
+                                                >
+                                                    {t("numberOfTyres")} <span>*</span>
+                                                </TmTypography>
+                                                <TmNumberField
+                                                    testid={'numberOfTyres'}
+                                                    value={numberOfTyres}
+                                                    label={t("")}
+                                                    required={true}
+                                                    error={!numberOfTyres || numberOfTyres <= 0}
+                                                    sx={{
+                                                        width: '20%',
+                                                        height: '100%',
+                                                        '& .MuiInputBase-input.MuiOutlinedInput-input': {
+                                                            padding: '8px !important'
+                                                        }
+                                                    }}
+                                                    onChange={onChangeTyres}
+                                                    disabled={false}
+                                                ></TmNumberField>
+                                            </Stack>
+                                        );
+                                    case ChargeType.LAMP:
+                                        return (
+                                            <Stack key={type} direction={"row"} alignItems={"center"}>
+                                                <TmTypography
+                                                    fontWeight="500"
+                                                    testid={''}
+                                                    sx={style}
+                                                >
+                                                    {t("numberOfLamps")} <span>*</span>
+                                                </TmTypography>
+                                                <TmNumberField
+                                                    testid={'numberOfLamps'}
+                                                    value={numberOfLamps}
+                                                    label={t("")}
+                                                    required={true}
+                                                    error={!numberOfLamps || numberOfLamps <= 0}
+                                                    sx={{
+                                                        width: '20%',
+                                                        '& .MuiInputBase-input.MuiOutlinedInput-input': {
+                                                            padding: '8px !important'
+                                                        }
+                                                    }}
+                                                    onChange={onChangeLamps}
+                                                    disabled={false}
+                                                ></TmNumberField>
+                                            </Stack>
+                                        );
+                                    case ChargeType.LENGTH:
+                                        return (
+                                            <Stack key={type} direction={"row"} alignItems={"center"}>
+                                                <TmTypography
+                                                    fontWeight="500"
+                                                    testid={''}
+                                                    sx={style}
+                                                >
+                                                    {t("lengthOfVehicle")} <span>*</span>
+                                                </TmTypography>
+                                                <TmTextField
+                                                    testid={'lengthOfVehicle'}
+                                                    value={vehicleLength}
+                                                    onChange={(e) => setVehicleLength(Number(e.target.value))}
+                                                    disabled={false}
+                                                    required={true}
+                                                    error={!vehicleLength || vehicleLength <= 0}
+                                                    sx={{
+                                                        width: '50%',
+                                                        height: '100%',
+                                                        '& .MuiInputBase-input.MuiOutlinedInput-input': {
+                                                            padding: '0px 20px 0px 0px !important'
+                                                        }
+                                                    }}
+                                                    inputProps={{
+                                                        inputMode: 'numeric',
+                                                        pattern: '[0-9]*'
+                                                    }}
+                                                    endadornment={(
+                                                        <InputAdornment position="end" style={{ textTransform: 'lowercase' }}>m</InputAdornment>
+                                                    )}
+                                                />
+                                            </Stack>
+                                        );
+                                    default:
+                                        return null;
+                                }
+                            })}
+                        </Grid>
+                    );
+                })()}
+            </DialogContent>
+
+            <DialogActions>
+                <TmButton
+                    sx={{ color: theme.palette.secondary.main }}
+                    testid={toCamelCaseWords(testId, 'dialogConfirmButton')}
+                    startIcon={<CheckIcon />}
+                    onClick={onConfirm}
+                    disabled={!isFormValid}
+                >
+                    {t('confirm')}
+                </TmButton>
+
+                <TmButton
+                    testid={toCamelCaseWords(testId, 'dialogCloseButton')}
+                    startIcon={<CancelIcon />}
+                    onClick={handleCloseDialog}
+                >
+                    {t('close')}
+                </TmButton>
+            </DialogActions>
+        </Dialog>
+    )
+}
+
+export default memo(ChargeTypeDialog);

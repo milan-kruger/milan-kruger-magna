@@ -1,0 +1,155 @@
+  pipeline {
+    agent {
+        label 'openstack1'
+    }
+    
+    tools {
+        maven 'maven-latest'
+    }
+
+    environment {
+        HARBOR_PATH = "harbor.devops.africa/trafman"
+        IMAGE_NAME = "trafman-transgressions-fe"
+        TAG = "${BUILD_NUMBER}"
+    }
+
+    options {
+        office365ConnectorWebhooks([[
+            name: 'MS-Teams-Cirrus-Pipeline',
+            startNotification: true,
+            notifySuccess: true,
+            notifyAborted: true,
+            notifyNotBuilt: false,
+            notifyUnstable: false,
+            notifyFailure: true,
+            notifyBackToNormal: true,
+            notifyRepeatedFailure: false,
+            timeout: '30000',
+            url: 'https://fischercons.webhook.office.com/webhookb2/d83f665f-afbf-40fe-ba02-4c62272bf76b@a5b59e1a-edba-42b1-bc82-5e3b0bf3b67f/JenkinsCI/1e35587abb0d4c87ace2c193643cd7bc/ae1f7c1a-7857-4ee7-9a1e-42d3a2d8beeb'
+        ]])
+    }
+
+    stages {
+
+        stage('Clean Workspace'){
+            steps {
+                cleanWs()
+            }
+        }
+
+        stage('Clone Gitlab project') {
+            steps {
+                git branch: 'main', credentialsId: 'magnabotgo-ssh', url: 'git@github.com:MagnaBC/Trafman-Transgressions-FE.git'
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    def scannerHome = tool name: 'sonarqube'
+                    // def scannerScript = "${scannerHome}/bin/sonar-scanner"
+                    withSonarQubeEnv('MagnaBC SonarQube') {
+                      sh "${scannerHome}/bin/sonar-scanner"
+                    }
+                }
+            }
+        }
+        
+        stage("Quality Gate") {
+            steps {
+                timeout(time: 1, unit: 'HOURS') {
+                    // Parameter indicates whether to set pipeline to UNSTABLE if Quality Gate fails
+                    // true = set pipeline to UNSTABLE, false = don't
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+        
+        stage('Build Project'){
+            steps {
+                nodejs('NodeJS 20.0.0') {
+                    sh '''
+                        nodeVersion=$(node --version)
+                        npmVersion=$(npm --version)
+                        NPM_TAG_VERSION=0.0.$TAG
+                        echo FE VERSION: $NPM_TAG_VERSION
+                        npm version $NPM_TAG_VERSION --no-git-tag-version
+                        echo Starting build
+                        echo "NodeJS version \n $nodeVersion"
+                        echo "npm version \n $npmVersion"
+                        echo "Running npm install"
+                        npm install
+                        echo "Running npm run build"
+                        PUBLIC_URL=/transgressions
+                        echo $PUBLIC_URL
+                        npm run build
+                    '''
+                }
+            }
+        }
+
+        // stage('Snyk Vulnerability Scan') {
+        //   steps {
+        //     sh "rm package-lock.json"
+        //     snykSecurity(
+        //       snykInstallation: 'magna-snyk',
+        //       snykTokenId: 'magna-snyk-token',
+        //       failOnIssues: false,
+        //     )
+        //   }
+        // }
+
+        stage('Restructure Artifacts') {
+            steps {
+                sh '''
+                    mkdir image
+                    mkdir image/config
+                    mkdir image/build
+                    mv .devops/Dockerfile image
+                    mv .devops/nginx.conf image/config
+                    mv build/* image/build/
+                '''
+            }
+        }
+        stage('Login to Nexus and Harbor') {
+            steps {
+                dir('image') {
+                    withCredentials([usernamePassword(credentialsId: 'harbor-magnabot', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
+                        sh "podman login -u \'$USERNAME\' -p $PASSWORD harbor.devops.africa"
+                    }
+                }
+            }
+        }
+
+        stage('Build Podman Image') {
+            steps {
+                sh '''
+                    cd image
+                    podman build -t $HARBOR_PATH/$IMAGE_NAME:$TAG -f Dockerfile .
+                    podman tag $HARBOR_PATH/$IMAGE_NAME:$TAG $HARBOR_PATH/$IMAGE_NAME:latest
+                '''
+            }
+        }            
+
+        stage('Publish Image') {
+            steps {
+                sh '''
+                    podman push $HARBOR_PATH/$IMAGE_NAME:$TAG
+                    podman push $HARBOR_PATH/$IMAGE_NAME:latest
+
+                    cd image
+                    echo $TAG > tag.txt
+                '''
+            }
+        }
+
+        stage('Publish build number') {
+            steps {
+                archiveArtifacts artifacts: 
+                    "**/tag.txt",
+                    fingerprint: true, 
+                    onlyIfSuccessful: true
+            }
+        }
+    }
+}

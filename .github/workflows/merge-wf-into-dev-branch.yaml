@@ -1,0 +1,74 @@
+name: Merge WF from main into develop branch
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - '.github/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write       # ✅ Needed to push branch
+  pull-requests: write  # ✅ Needed to create PR & auto-merge
+
+jobs:
+  merge-folder:
+    name: Merge WF into develop branch
+    runs-on: trafman
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.MAGNABOT_GH_TOKEN }}
+          persist-credentials: true # since branch is protected, provide token (that has permissions) to the commit/push commands
+          fetch-depth: 0  # So we can checkout other branches if needed
+
+      - name: Copy .github folder from main branch to cache
+        run: |
+          cp -rf .github /tmp/.github
+          # ls -la /tmp/.github
+
+      - name: Configure git user
+        run: |
+          git config --global user.name 'MagnaBotGo'
+          git config --global user.email 'devops@magnabc.co.za'
+
+      - name: Copy .github folder from cache to develop branch
+        run: |
+          echo "Github repo is: ${{ github.repository }}"
+          git fetch origin develop
+          git checkout develop
+          echo "Current branch is: $(git branch --show-current)"
+          # ls -laR /tmp/.github
+          rm -rf .github
+          cp -rf /tmp/.github .
+          
+          git add .github
+          echo "\n********************************************"
+          echo "List of changed files:"
+          #  shows the actual changed files before committing, you should compare the staged changes
+          git diff --cached --name-only
+          echo "********************************************\n"
+
+      - name: Commit and Push .github folder changes on develop branch
+        run: |
+          echo "Current branch is: $(git branch --show-current)"
+          echo "Git username is: $(git config user.name)"
+          echo "Git config: $(git config --list)"
+          if git diff --cached --quiet; then
+            echo "✅ No changes to commit."
+          else
+            git commit -m "Auto-merge .github files from main branch back into develop branch" || {
+              echo "❌ Commit failed"
+              exit 1
+            }
+            git push origin develop || {
+              echo "❌ Push failed"
+              exit 1
+            }
+            echo "✅ Auto-merge enabled successfully."
+          fi
+

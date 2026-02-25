@@ -1,0 +1,7 @@
+export enum CourtDocumentsView {
+    COURT_REGISTER,
+    CONTROL_DOCUMENTS,
+    COURT_RESULTS,
+    WARRANT_OF_ARREST_REGISTER,
+    WARRANT_OF_ARREST
+}

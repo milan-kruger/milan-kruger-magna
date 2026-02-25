@@ -1,0 +1,34 @@
+name: Build
+on:
+  pull_request:
+    branches:
+      - develop
+      # - main
+
+jobs:
+  # ####################################################################################################### #
+  #                                                Bare Build                                               #
+  # ####################################################################################################### #
+  build-job:
+    uses: MagnaBC/Trafman-DevOps-Sandbox/.github/workflows/fe-ci-template.yaml@master
+    name: Build the Image
+    with:
+      SONARQUBE_PROJECT_KEY: MagnaBC_Trafman-Transgressions-FE_eb9f6a02-e821-47d4-9ea8-7241bc8128df
+      SONARQUBE_PROJECT_NAME: Trafman-Transgressions-FE
+      NODEJS_VERSION: 20.0.0
+      HARBOR_PATH: harbor.devops.africa
+      IMAGE_NAME: trafman/trafman-transgressions-fe
+      PATH: Dockerfile
+      CONTEXT: image
+      SONAR_HOST_URL: "${{ vars.SONAR_HOST_URL }}"
+      SONARQUBE_ENABLED: 'true'
+      PROJECT_BRANCH: 'master'
+      PRODUCT: 'transgressions-fe'
+      TEST_RESULT_PATH: 'coverage/lcov-report'
+      REPORT_SERVER: "http://${{ vars.RS_HOSTNAME }}"
+      UPLOAD_SERVER: "http://${{ vars.US_HOSTNAME }}"
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      HARBOR_MAGNABOT_USERNAME: "${{ secrets.HARBOR_MAGNABOT_USERNAME }}"
+      HARBOR_MAGNABOT_PASSWORD: "${{ secrets.HARBOR_MAGNABOT_PASSWORD }}"
+    permissions: read-all

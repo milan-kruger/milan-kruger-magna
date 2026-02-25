@@ -1,0 +1,176 @@
+name: Transgressions FE CI/CD
+on:
+  push:
+    branches:
+      - develop
+      - main
+    paths-ignore:
+      - '.devops/**'
+      - '.github/**'
+      - '.vscode/**'
+      - '*.md'
+  workflow_dispatch:
+
+jobs:
+  # ####################################################################################################### #
+  #                                            Continuous Integration                                       #
+  # ####################################################################################################### #
+  build-job:
+    uses: MagnaBC/trafman-devops/.github/workflows/fe-ci-template.yaml@master
+    name: Build the Image
+    with:
+      SONARQUBE_PROJECT_KEY: MagnaBC_Trafman-Transgressions-FE_eb9f6a02-e821-47d4-9ea8-7241bc8128df
+      SONARQUBE_PROJECT_NAME: Trafman-Transgressions-FE
+      NODEJS_VERSION: lts/jod
+      HARBOR_PATH: harbor.devops.africa
+      IMAGE_NAME: trafman/trafman-transgressions-fe
+      PATH: Dockerfile
+      CONTEXT: image
+      SONAR_HOST_URL: "${{ vars.SONAR_HOST_URL }}"
+      SONARQUBE_ENABLED: 'true'
+      PROJECT_BRANCH: "${{ github.ref }}"
+      PRODUCT: 'transgressions-fe'
+      TEST_RESULT_PATH: 'coverage/lcov-report'
+      REPORT_SERVER: "http://${{ vars.RS_HOSTNAME }}"
+      UPLOAD_SERVER: "http://${{ vars.US_HOSTNAME }}"
+      MAVEN_GROUP_ID: "za.co.magnabc.transgressions"
+      MAVEN_ARTIFACT_ID: "transgressions-fe"
+    secrets:
+      SONAR_TOKEN: "${{ secrets.SONAR_TOKEN }}"
+      HARBOR_MAGNABOT_USERNAME: "${{ secrets.HARBOR_MAGNABOT_USERNAME }}"
+      HARBOR_MAGNABOT_PASSWORD: "${{ secrets.HARBOR_MAGNABOT_PASSWORD }}"
+      MAGNABOT_GH_TOKEN: "${{ secrets.MAGNABOT_GH_TOKEN }}"
+    permissions: write-all
+    
+  # unit-test-status:
+  #   name: Display the Unit Tests Status
+  #   runs-on: trafman
+  #   needs: build-job
+  #   steps:
+  #     - name: test
+  #       shell: bash
+  #       run: |
+  #         exit ${{ needs.build-job.outputs.TEST_STATUS }}
+
+  # sonar-test-status:
+  #   name: Display the SonarQube Status
+  #   runs-on: trafman
+  #   needs: build-job
+  #   steps:
+  #     - name: test
+  #       shell: bash
+  #       run: |
+  #         exit ${{ needs.build-job.outputs.SONAR_STATUS }}
+
+  # # ####################################################################################################### #
+  # #                                              Continuous Delivery                                        #
+  # # ####################################################################################################### #
+  # deploy:
+  #   if: ${{ needs.build-job.outputs.SONAR_STATUS == '0' && needs.build-job.outputs.TEST_STATUS == '0'}}
+  #   name: Deploy the image
+  #   runs-on: trafman
+  #   needs: build-job
+  #   steps:
+  #     - name: Checkout Devops Sandbox Repo
+  #       uses: actions/checkout@v4
+  #       with:
+  #         repository: MagnaBC/Trafman-DevOps-Sandbox
+  #         ref: master
+  #         # Create a secret that contains your PAT to checkout different repos. Please see the documentation below:
+  #         # https://github.com/actions/checkout#Checkout-multiple-repos-private
+  #         # https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens
+  #         token: ${{ secrets.TRAFMAN_DEVOPS_SANDBOX_PAT_WRITE }}
+  #         path: sandbox
+          
+  #     # Update the image in the overwrite helm chart values.yaml file for Central
+  #     - name: Update the image tag for the overwrite helm chart of Central
+  #       if: ${{ github.ref == 'refs/heads/develop' }}
+  #       uses: MagnaBC/magna-devops/.github/actions/update-image-tag@master
+  #       with:
+  #         branch: master
+  #         base_directory: ./sandbox
+  #         value_file: "./argo-apps/namibia/central/dev/trafman/values.yaml"
+  #         image_tag_parameter: ".transgressions.frontend.image.tag"
+  #         image_tag: "${{ needs.build-job.outputs.new_image_tag }}"
+  #         GH_BOT_EMAIL: ${{ vars.GH_BOT_EMAIL }}
+  #         GH_BOT_USERNAME: ${{ vars.GH_BOT_USERNAME }}
+        
+  #     # Update the image in the overwrite helm chart values.yaml file for Brakwater
+  #     - name: Update the image tag for the overwrite helm chart of Brakwater
+  #       if: ${{ github.ref == 'refs/heads/develop' }}
+  #       uses: MagnaBC/magna-devops/.github/actions/update-image-tag@master
+  #       with:
+  #         branch: master
+  #         base_directory: ./sandbox
+  #         value_file: "./argo-apps/namibia/brakwater/dev/trafman/values.yaml"
+  #         image_tag_parameter: ".transgressions.frontend.image.tag"
+  #         image_tag: "${{ needs.build-job.outputs.new_image_tag }}"
+  #         GH_BOT_EMAIL: ${{ vars.GH_BOT_EMAIL }}
+  #         GH_BOT_USERNAME: ${{ vars.GH_BOT_USERNAME }}
+
+  #     # Update the image in the overwrite helm chart values.yaml file for Gobabis
+  #     - name: Update the image tag for the overwrite helm chart of Gobabis
+  #       if: ${{ github.ref == 'refs/heads/develop' }}
+  #       uses: MagnaBC/magna-devops/.github/actions/update-image-tag@master
+  #       with:
+  #         branch: master
+  #         base_directory: ./sandbox
+  #         value_file: "./argo-apps/namibia/gobabis/dev/trafman/values.yaml"
+  #         image_tag_parameter: ".transgressions.frontend.image.tag"
+  #         image_tag: "${{ needs.build-job.outputs.new_image_tag }}"
+  #         GH_BOT_EMAIL: ${{ vars.GH_BOT_EMAIL }}
+  #         GH_BOT_USERNAME: ${{ vars.GH_BOT_USERNAME }}
+      
+  #     # Update the image in the base helm chart values.yaml file
+  #     # This will build a new helm chart when a commit to the master branch is made.
+  #     - name: Update the image tag for the base helm chart
+  #       if: ${{ github.ref == 'refs/heads/main' }}
+  #       uses: MagnaBC/magna-devops/.github/actions/update-image-tag@master
+  #       with:
+  #         branch: master
+  #         base_directory: ./sandbox
+  #         value_file: "./helm-charts/trafman/values.yaml"
+  #         image_tag_parameter: ".transgressions.frontend.image.tag"
+  #         image_tag: "${{ needs.build-job.outputs.new_image_tag }}"
+  #         GH_BOT_EMAIL: ${{ vars.GH_BOT_EMAIL }}
+  #         GH_BOT_USERNAME: ${{ vars.GH_BOT_USERNAME }}
+
+  # argo-health-check:
+  #   if: ${{ needs.build-job.outputs.SONAR_STATUS == '0' && needs.build-job.outputs.TEST_STATUS == '0' && github.ref == 'refs/heads/develop' }}
+  #   name: Verify the deployment success
+  #   needs: deploy
+  #   uses: MagnaBC/Trafman-DevOps-Sandbox/.github/workflows/argo-health-check.yaml@master
+  #   with:
+  #     ARGOCD_HOSTNAME: "192.168.30.86"
+  #     ARGOCD_PORT: "9000"
+  #     ENVIRONMENT: DEV
+  #     CLIENT: NAMIBIA
+  #   secrets: inherit
+  #   permissions: read-all
+
+  # update-deployment-status:
+  #   if: ${{ needs.argo-health-check.result == 'success' && github.ref == 'refs/heads/develop' }}
+  #   name: Update Deployment Status
+  #   runs-on: trafman
+  #   needs: argo-health-check
+  #   environment:
+  #     name: DEV
+  #   steps:
+  #     - name: Update Deployment Status
+  #       run: echo "Deployment to DEV environment was successful."
+
+  # sanity-tests:
+  #   name: Run Sanity Tests
+  #   needs: argo-health-check
+  #   uses: MagnaBC/Trafman-Robot-Testing/.github/workflows/robot-test.yaml@main
+  #   with:
+  #     PARALLEL_EXECUTION: 'true'
+  #     TESTLEVEL_SPLIT: 'true'
+  #     TEST_PATH: './tests/'
+  #     INCLUDE_TAG: 'sanity'
+  #     EXCLUDE_TAG: 'not-ready'
+  #     ENVIRONMENT: DEV
+  #     CLIENT: NAMIBIA
+  #     ARTIFACT_NAME: 'robot-sanity-test-results'
+  #   secrets: inherit
+  #   permissions: read-all

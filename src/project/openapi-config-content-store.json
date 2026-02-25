@@ -1,0 +1,10 @@
+{
+    "schemaFile": "http://localhost:9301/contentstore-be/v3/api-docs",
+    "apiFile": "../project/redux/api/contentStoreBaseApi.ts",
+    "apiImport": "contentStoreBaseSplitApi",
+    "outputFile": "./redux/api/contentStoreApi.ts",
+    "exportName": "contentStoreApi",
+    "hooks": true,
+    "tag": true,
+    "filterEndpoints": ["getAbout"]
+}

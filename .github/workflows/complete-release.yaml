@@ -1,0 +1,73 @@
+name: Complete Release
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+      - master
+
+jobs:
+  tag_release:
+    name: Create Tag and GitHub Release
+    # Only run if PR was merged (not just closed)
+    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'release/')
+    uses: MagnaBC/trafman-devops/.github/workflows/reusable-tag-release.yaml@master
+    with:
+      release_notes: ${{ github.event.pull_request.body }}
+      create_github_release: true
+    secrets:
+      MAGNABOT_GH_TOKEN: ${{ secrets.MAGNABOT_GH_TOKEN }}
+      TRAFMAN_TEAMS_WEBHOOK_URL: ${{ secrets.TRAFMAN_TEAMS_WEBHOOK_URL }}
+
+  update_develop:
+    name: Update Develop Branch
+    needs: tag_release
+    # Only run if tagging was successful
+    if: needs.tag_release.result == 'success'
+    uses: MagnaBC/trafman-devops/.github/workflows/reusable-update-develop.yaml@master
+    with:
+      release_version: ${{ needs.tag_release.outputs.release_version }}
+      release_from_branch: 'develop'
+      release_to_branch: ${{ github.event.pull_request.base.ref }}
+    secrets:
+      MAGNABOT_GH_TOKEN: ${{ secrets.MAGNABOT_GH_TOKEN }}
+
+  summary:
+    name: Release Completion Summary
+    needs: [tag_release, update_develop]
+    # Always run summary, even if update_develop is skipped
+    if: always() && needs.tag_release.result == 'success'
+    runs-on: trafman
+    steps:
+      - name: Display Summary
+        run: |
+          echo "## ✅ Release Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Release Information" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version Released**: v${{ needs.tag_release.outputs.release_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Target Branch**: ${{ github.event.pull_request.base.ref }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **PR**: #${{ github.event.pull_request.number }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ needs.update_develop.result }}" == "success" ]; then
+            echo "### Post-Release Actions" >> $GITHUB_STEP_SUMMARY
+            echo "✅ Git tag created: v${{ needs.tag_release.outputs.release_version }}" >> $GITHUB_STEP_SUMMARY
+            echo "✅ GitHub Release created" >> $GITHUB_STEP_SUMMARY
+            echo "✅ Develop branch updated to: ${{ needs.update_develop.outputs.next_snapshot }}" >> $GITHUB_STEP_SUMMARY
+            echo "✅ Release branch deleted" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### Post-Release Actions" >> $GITHUB_STEP_SUMMARY
+            echo "✅ Git tag created: v${{ needs.tag_release.outputs.release_version }}" >> $GITHUB_STEP_SUMMARY
+            echo "✅ GitHub Release created" >> $GITHUB_STEP_SUMMARY
+            echo "⚠️  Develop branch update: ${{ needs.update_develop.result }}" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "1. 🎉 Verify the release in GitHub Releases" >> $GITHUB_STEP_SUMMARY
+          echo "2. 📦 Deploy to production if needed" >> $GITHUB_STEP_SUMMARY
+          echo "3. 📝 Communicate release to stakeholders" >> $GITHUB_STEP_SUMMARY
+          echo "4. 🔍 Monitor production for issues" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "[View Release](https://github.com/${{ github.repository }}/releases/tag/v${{ needs.tag_release.outputs.release_version }})" >> $GITHUB_STEP_SUMMARY

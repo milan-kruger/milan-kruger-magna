@@ -1,0 +1,11 @@
+{
+    "schemaFile": "http://localhost:9001/core-be/v3/api-docs",
+    "apiFile": "../project/redux/api/coreBaseApi.ts",
+    "apiImport": "coreBaseSplitApi",
+    "outputFile": "./redux/api/coreApi.ts",
+    "exportName": "coreApi",
+    "hooks": true,
+    "tag": true,
+    "filterEndpoints": ["findAllIdentityTypes", "getLookups", "getLoggedInUser", "findTrafficControlCentresByAuthority",
+      "getAbout", "changeAccountPassword", "login", "refreshAccessToken", "getMultipleLookups"]
+}

@@ -1,0 +1,1 @@
+export const MIN_LOOKUP_PAGE_SIZE = 999;

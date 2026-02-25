@@ -1,0 +1,9 @@
+{
+    "schemaFile": "http://localhost:8001/transgressions-be/v3/api-docs",
+    "apiFile": "../project/redux/api/transgressionsBaseApi.ts",
+    "apiImport": "transgressionsBaseSplitApi",
+    "outputFile": "./redux/api/transgressionsApi.ts",
+    "exportName": "transgressionsApi",
+    "hooks": true,
+    "tag": true
+}

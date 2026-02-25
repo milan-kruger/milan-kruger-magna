@@ -1,0 +1,10 @@
+{
+    "schemaFile": "http://localhost:9101/weigh-be/v3/api-docs",
+    "apiFile": "../project/redux/api/weighBaseApi.ts",
+    "apiImport": "weighBaseSplitApi",
+    "outputFile": "./redux/api/weighApi.ts",
+    "exportName": "weighApi",
+    "hooks": true,
+    "tag": true,
+    "filterEndpoints": ["updateVehicleWeighDetails", "updateControlCentreVisitStatus", "getAbout"]
+}
