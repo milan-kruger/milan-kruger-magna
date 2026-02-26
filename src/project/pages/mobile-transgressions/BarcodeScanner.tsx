@@ -14,9 +14,6 @@ type BarcodeResult = {
     bytes: Uint8Array;
 };
 
-/** Centre-crop ratio — scan only the middle 70% of the frame in each axis */
-const CROP_RATIO = 0.7;
-
 /** Shared reader options (allocated once) */
 const READER_OPTIONS: ReaderOptions = {
     formats: ['PDF417'],
@@ -132,20 +129,12 @@ function BarcodeScanner() {
                 if (!video || !streamRef.current) return;
 
                 if (video.readyState >= video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
-                    // Centre-crop: only send the middle 70% of the frame to the decoder
-                    const srcW = video.videoWidth;
-                    const srcH = video.videoHeight;
-                    const cropW = Math.round(srcW * CROP_RATIO);
-                    const cropH = Math.round(srcH * CROP_RATIO);
-                    const cropX = Math.round((srcW - cropW) / 2);
-                    const cropY = Math.round((srcH - cropH) / 2);
-
-                    canvas.width = cropW;
-                    canvas.height = cropH;
-                    ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
                     try {
-                        const imageData = ctx.getImageData(0, 0, cropW, cropH);
+                        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                         const results = await readBarcodes(imageData, READER_OPTIONS);
 
                         if (results.length > 0) {
