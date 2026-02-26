@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <!-- Google Tag Manager (need to be as high in the <head> of the page as possible) -->
+    <script>
+        (function (w, d, s, l, i) {
+            w[l] = w[l] || []; w[l].push({
+                'gtm.start':
+                    new Date().getTime(), event: 'gtm.js'
+            }); var f = d.getElementsByTagName(s)[0],
+                j = d.createElement(s), dl = l != 'dataLayer' ? '&l=' + l : ''; j.async = true; j.src =
+                    'https://www.googletagmanager.com/gtm.js?id=' + i + dl; f.parentNode.insertBefore(j, f);
+        })(window, document, 'script', 'dataLayer', 'GTM-MTP5ND9Q');
+    </script>
+    <meta charset="UTF-8" />
+    <link rel="icon" href="/milan-kruger-magna/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#555" />
+    <!-- Title -->
+    <title>Trafman</title>
+    <meta name="Trafman" content="A Trafman website." />
+    <!-- PWA -->
+    <link rel="manifest" href="/milan-kruger-magna/manifest.json" />
+    <!-- Service Worker -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/milan-kruger-magna/service-worker.js')
+                .then(registration => {
+                    console.log('Service Worker: Registered with scope', registration.scope);
+                })
+                .catch(error => {
+                    console.error('Service Worker: Registration failed:', error);
+                });
+        }
+    </script>
+    <!-- Launch file -->
+    <script>
+        if ('launchQueue' in window) {
+            window.launchQueue.setConsumer(async (launchParams) => {
+                for (const fileHandle of launchParams.files) {
+                    window.trafmanLaunchFile = fileHandle;
+                    console.log('Launch File: ', window.trafmanLaunchFile)
+                    break;
+                }
+            });
+        }
+    </script>
+  <script type="module" crossorigin src="/milan-kruger-magna/assets/index-CoKqnQFV.js"></script>
+  <link rel="modulepreload" crossorigin href="/milan-kruger-magna/assets/react-Cgg2GOmP.js">
+  <link rel="modulepreload" crossorigin href="/milan-kruger-magna/assets/pdf-DUajM2DU.js">
+  <link rel="modulepreload" crossorigin href="/milan-kruger-magna/assets/flags-BNKl102C.js">
+  <link rel="stylesheet" crossorigin href="/milan-kruger-magna/assets/index-B3JfI5TW.css">
+  <link rel="stylesheet" crossorigin href="/milan-kruger-magna/assets/roboto-DKRi4mBU.css">
+</head>
+
+<body>
+    <!-- Google Tag Manager (need to be immediately after the opening <body> tag) -->
+    <noscript>
+        <iframe
+            title="Google Tag Manager"
+            src="https://www.googletagmanager.com/ns.html?id=GTM-MTP5ND9Q"
+            height="0"
+            width="0"
+            style="display:none;visibility:hidden">
+        </iframe>
+    </noscript>
+    <div id="root"></div>
+</body>
+
+</html>
