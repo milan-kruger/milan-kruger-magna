@@ -27,7 +27,16 @@ jobs:
         run: npm ci
 
       - name: Build
-        run: npm run build
+        run: npm run build -- --base=/milan-kruger-magna/
+
+      # GitHub Pages serves 404.html for unknown paths — copy index.html so
+      # the SPA router (with the correct basename) handles client-side routing.
+      - name: Create 404.html for SPA routing
+        run: cp dist/index.html dist/404.html
+
+      # Prevent Jekyll from ignoring files/folders that start with underscore
+      - name: Add .nojekyll
+        run: touch dist/.nojekyll
 
       - name: Deploy to gh-pages branch
         uses: peaceiris/actions-gh-pages@v4

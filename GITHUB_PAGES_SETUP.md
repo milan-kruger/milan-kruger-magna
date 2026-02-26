@@ -16,8 +16,27 @@ This project is configured to deploy to **GitHub Pages** at:
 
 Every push to `main` triggers the workflow which:
 1. Installs dependencies (`npm ci`)
-2. Builds the app (`npm run build`)
-3. Force-pushes the `dist/` output to the `gh-pages` branch via [peaceiris/actions-gh-pages](https://github.com/peaceiris/actions-gh-pages)
+2. Builds the app with `vite build --base=/milan-kruger-magna/` so all asset paths and the router basename are correct
+3. Copies `dist/index.html` → `dist/404.html` so GitHub Pages returns the SPA shell for deep-linked URLs instead of a real 404
+4. Adds a `.nojekyll` file so GitHub Pages serves `_` prefixed asset chunks
+5. Force-pushes the `dist/` output to the `gh-pages` branch via [peaceiris/actions-gh-pages](https://github.com/peaceiris/actions-gh-pages)
+
+---
+
+## How routing works
+
+| Environment | Vite `--base` | `BASE_URL` (router basename) |
+|-------------|---------------|------------------------------|
+| Local dev   | `/` (default) | `/transgressions`            |
+| GitHub Pages | `/milan-kruger-magna/` | `/milan-kruger-magna` |
+
+`src/framework/const.ts` reads `import.meta.env.BASE_URL` at build time.
+When Vite's base is `/` (dev) it falls back to `/transgressions`; otherwise it
+uses the build-time base, keeping both environments working without any code change.
+
+GitHub Pages doesn't support HTML5 `pushState` routing natively — the
+`404.html` copy ensures refreshes/deep-links load the SPA shell, which then
+lets React Router handle the path client-side.
 
 ---
 
