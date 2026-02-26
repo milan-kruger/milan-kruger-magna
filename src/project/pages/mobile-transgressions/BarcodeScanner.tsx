@@ -33,6 +33,56 @@ const READER_OPTIONS: ReaderOptions = {
 };
 
 /**
+ * Greyscale preprocessing levels — each more aggressive than the last.
+ * The level is chosen based on how many consecutive frames failed to decode.
+ *
+ *  0 – no preprocessing (raw colour frame)
+ *  1 – simple luminance greyscale
+ *  2 – greyscale + moderate contrast stretch
+ *  3 – greyscale + heavy contrast + binary threshold
+ *
+ * The cycle repeats so every 4th frame is raw again, giving the decoder a
+ * chance with the original data before re-escalating.
+ */
+const GREYSCALE_LEVELS = 4;
+
+function preprocessGreyscale(imageData: ImageData, failedAttempts: number): ImageData {
+    const level = failedAttempts % GREYSCALE_LEVELS;
+
+    // Level 0 — pass-through
+    if (level === 0) return imageData;
+
+    const { data, width, height } = imageData;
+    const out = new ImageData(new Uint8ClampedArray(data), width, height);
+    const d = out.data;
+
+    for (let i = 0; i < d.length; i += 4) {
+        // ITU-R BT.709 luminance
+        let lum = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+
+        if (level >= 2) {
+            // Contrast stretch: pull values towards 0 / 255.
+            // factor grows with level: 1.5× at level 2, 2.5× at level 3+
+            const factor = level === 2 ? 1.5 : 2.5;
+            lum = ((lum - 128) * factor) + 128;
+        }
+
+        if (level >= 3) {
+            // Hard binary threshold — maximises edge contrast for PDF417
+            lum = lum < 128 ? 0 : 255;
+        }
+
+        // Clamp
+        lum = lum < 0 ? 0 : lum > 255 ? 255 : lum;
+
+        d[i] = d[i + 1] = d[i + 2] = lum;
+        // alpha (d[i+3]) stays unchanged
+    }
+
+    return out;
+}
+
+/**
  * Pre-warm the WASM module at import time so the binary is fetched,
  * compiled, and instantiated before the user ever taps "Scan".
  * The promise is intentionally fire-and-forget.
@@ -67,6 +117,7 @@ function BarcodeScanner() {
     const scanTimerRef = useRef<number>(0);
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
+    const failedAttemptsRef = useRef<number>(0);
 
     const stopCamera = useCallback(() => {
         clearTimeout(scanTimerRef.current);
@@ -83,6 +134,7 @@ function BarcodeScanner() {
     const startScanning = useCallback(async () => {
         setError(null);
         setResult(null);
+        failedAttemptsRef.current = 0;
 
         if (!videoRef.current) return;
 
@@ -134,10 +186,12 @@ function BarcodeScanner() {
                     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
                     try {
-                        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                        const rawImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                        const imageData = preprocessGreyscale(rawImageData, failedAttemptsRef.current);
                         const results = await readBarcodes(imageData, READER_OPTIONS);
 
                         if (results.length > 0) {
+                            failedAttemptsRef.current = 0;
                             const decoded = results[0];
                             setResult({
                                 rawValue: decoded.text,
@@ -147,7 +201,10 @@ function BarcodeScanner() {
                             stopCamera();
                             return;
                         }
+
+                        failedAttemptsRef.current++;
                     } catch {
+                        failedAttemptsRef.current++;
                         // No barcode in this frame, keep scanning
                     }
                 }
