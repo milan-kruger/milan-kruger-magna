@@ -5,19 +5,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import TmIconButton from '../../../framework/components/button/TmIconButton';
 import TmTypography from '../../../framework/components/typography/TmTypography';
-import { BrowserMultiFormatReader } from '@zxing/browser';
-import { BarcodeFormat, DecodeHintType } from '@zxing/library';
+import { readBarcodes } from 'zxing-wasm/reader';
 import { parseDLBarcode } from './dlBarcodeParser';
 
 type BarcodeResult = {
     rawValue: string;
     format: string;
 };
-
-const hints = new Map<DecodeHintType, unknown>();
-hints.set(DecodeHintType.TRY_HARDER, true);
-hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.PDF_417]);
-const codeReader = new BrowserMultiFormatReader(hints);
 
 function BarcodeScanner() {
     const { t } = useTranslation();
@@ -60,8 +54,8 @@ function BarcodeScanner() {
                 stream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         facingMode: { exact: 'environment' },
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 },
+                        width: { ideal: 3840 },
+                        height: { ideal: 2160 },
                     },
                 });
             } catch {
@@ -91,43 +85,50 @@ function BarcodeScanner() {
                 if (video.readyState >= video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
                     canvas.width = video.videoWidth;
                     canvas.height = video.videoHeight;
-
                     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-//
-// // --- Grayscale + contrast boost ---
-//                     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-//                     const data = imageData.data;
-//
-//                     const contrast = 1.4; // 1.0 = none, try 1.2–1.6
-//                     const intercept = 128 * (1 - contrast);
-//
-//                     for (let i = 0; i < data.length; i += 4) {
-//                         // Convert to luminance (perceptual weighting)
-//                         const gray =
-//                             0.299 * data[i] +
-//                             0.587 * data[i + 1] +
-//                             0.114 * data[i + 2];
-//
-//                         // Apply contrast
-//                         const enhanced = contrast * gray + intercept;
-//
-//                         data[i] = data[i + 1] = data[i + 2] = enhanced;
-//                     }
-//
-//                     ctx.putImageData(imageData, 0, 0);
 
                     try {
-                        console.log(canvas.toDataURL())
-
-                        const decoded = await codeReader.decodeFromCanvas(canvas);
-                        setResult({
-                            rawValue: decoded.getText(),
-                            format: BarcodeFormat[decoded.getBarcodeFormat()] ?? String(decoded.getBarcodeFormat())
+                        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                        const results = await readBarcodes(imageData, {
+                            // Only look for PDF417 (not pure/generated, real-world document barcode)
+                            formats: ['PDF417'],
+                            // Accuracy over speed
+                            tryHarder: true,
+                            // Handle tilted / upside-down barcodes
+                            tryRotate: true,
+                            // Handle inverted reflectance
+                            tryInvert: true,
+                            // Allow downscaling on high-res camera frames
+                            tryDownscale: true,
+                            downscaleFactor: 2,
+                            downscaleThreshold: 500,
+                            // Morphological denoising for 2D symbols
+                            tryDenoise: true,
+                            // Not a clean generated image
+                            isPure: false,
+                            // Best binarizer for uneven lighting / real-world images
+                            binarizer: 'LocalAverage',
+                            // Require more matching scan lines for higher confidence
+                            minLineCount: 3,
+                            // Return raw decoded text (not HRI-formatted)
+                            textMode: 'Plain',
+                            // Only need the single PDF417 on the document
+                            maxNumberOfSymbols: 1,
+                            // Don't surface checksum-error results
+                            returnErrors: false,
                         });
-                        stopCamera();
-                        return;
+
+                        if (results.length > 0) {
+                            const decoded = results[0];
+                            setResult({
+                                rawValue: decoded.text,
+                                format: decoded.format,
+                            });
+                            stopCamera();
+                            return;
+                        }
                     } catch {
-                        // NotFoundException — no barcode in this frame, keep scanning
+                        // No barcode in this frame, keep scanning
                     }
                 }
 

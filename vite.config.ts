@@ -1,10 +1,12 @@
 import react from '@vitejs/plugin-react-swc';
-import react from '@vitejs/plugin-react-swc';
 import { defineConfig, Plugin } from 'vite';
 import svgr from 'vite-plugin-svgr';
 import { visualizer } from 'rollup-plugin-visualizer';
 import checker from "vite-plugin-checker";
 import { viteStaticCopy } from 'vite-plugin-static-copy';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 /**
  * Rewrites every occurrence of the LOCAL_BASE placeholder inside manifest.json
@@ -31,8 +33,7 @@ function rewriteManifestPlugin(): Plugin {
         configureServer(server) {
             server.middlewares.use((req, res, next) => {
                 if (req.url?.includes('manifest.json')) {
-                    const fs = require('fs');
-                    const path = require('path');
+                    const __dirname = path.dirname(fileURLToPath(import.meta.url));
                     const file = path.resolve(__dirname, 'public/manifest.json');
                     const content = fs.readFileSync(file, 'utf-8').replaceAll(LOCAL_BASE, base);
                     res.setHeader('Content-Type', 'application/json');
