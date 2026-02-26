@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "7ecd4597699e149fff59917de9aaff575371d8cb",
-        "shortHash": "7ecd459",
-        "message": "Optimize camera and added in preprocessing",
-        "date": "2026-02-26T23:50:34+02:00"
+        "latestCommit": "83517f6c1e4531c39a0a0272dbc086f4030288d0",
+        "shortHash": "83517f6",
+        "message": "Added in white-black rebalance",
+        "date": "2026-02-27T00:00:20+02:00"
     }
 }
