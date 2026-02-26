@@ -20,8 +20,7 @@ function rewriteManifestPlugin(): Plugin {
     return {
         name: 'rewrite-manifest',
         configResolved(config) {
-            // config.base is the resolved base (e.g. '/milan-kruger-magna/' or '/')
-            base = config.base === '/' ? LOCAL_BASE : config.base;
+            base = config.base;
         },
         generateBundle(_options, bundle) {
             const manifestAsset = bundle['manifest.json'];
@@ -46,8 +45,28 @@ function rewriteManifestPlugin(): Plugin {
     };
 }
 
+/**
+ * Replaces the __BASE__ placeholder in index.html with the correct base path.
+ * In dev mode this defaults to /transgressions/, for production builds it uses
+ * whatever --base flag was passed (e.g. /milan-kruger-magna/).
+ */
+function rewriteIndexHtmlPlugin(): Plugin {
+    const LOCAL_BASE = '/transgressions/';
+    let base = LOCAL_BASE;
+    return {
+        name: 'rewrite-index-html',
+        configResolved(config) {
+            base = config.base;
+        },
+        transformIndexHtml(html) {
+            return html.replaceAll('__BASE__', base);
+        }
+    };
+}
+
 // https://vite.dev/config/
 export default defineConfig({
+    base: '/transgressions/',
     define: {
         global: "window",
     },
@@ -62,6 +81,7 @@ export default defineConfig({
         svgr(),
         visualizer(),
         rewriteManifestPlugin(),
+        rewriteIndexHtmlPlugin(),
         checker({
             typescript: {
                 tsconfigPath: './tsconfig.app.json',

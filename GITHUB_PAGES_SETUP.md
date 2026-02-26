@@ -9,7 +9,7 @@ This project is configured to deploy to **GitHub Pages** at:
 
 | Part | Details |
 |------|---------|
-| **Vite base URL** | `base: '/milan-kruger-magna/'` in `vite.config.ts` |
+| **Vite base URL** | `base: '/transgressions/'` in `vite.config.ts` (overridden by `--base` at build time) |
 | **Source branch** | `main` |
 | **Deployment branch** | `gh-pages` (orphan branch, managed automatically) |
 | **CI/CD** | `.github/workflows/deploy-gh-pages.yml` (GitHub Actions) |
@@ -25,14 +25,15 @@ Every push to `main` triggers the workflow which:
 
 ## How routing works
 
-| Environment | Vite `--base` | `BASE_URL` (router basename) |
+| Environment | Vite `base` | `BASE_URL` (router basename) |
 |-------------|---------------|------------------------------|
-| Local dev   | `/` (default) | `/transgressions`            |
-| GitHub Pages | `/milan-kruger-magna/` | `/milan-kruger-magna` |
+| Local dev   | `/transgressions/` (from config) | `/transgressions`            |
+| GitHub Pages | `/milan-kruger-magna/` (via `--base`) | `/milan-kruger-magna` |
 
 `src/framework/const.ts` reads `import.meta.env.BASE_URL` at build time.
-When Vite's base is `/` (dev) it falls back to `/transgressions`; otherwise it
-uses the build-time base, keeping both environments working without any code change.
+The `base` in `vite.config.ts` defaults to `/transgressions/` for local dev;
+CI overrides it with `--base=/milan-kruger-magna/` for GitHub Pages, keeping
+both environments working without any code change.
 
 GitHub Pages doesn't support HTML5 `pushState` routing natively — the
 `404.html` copy ensures refreshes/deep-links load the SPA shell, which then
