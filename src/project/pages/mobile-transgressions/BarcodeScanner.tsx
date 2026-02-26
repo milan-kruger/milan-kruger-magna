@@ -117,6 +117,7 @@ function BarcodeScanner() {
                             maxNumberOfSymbols: 1,
                             // Don't surface checksum-error results
                             returnErrors: false,
+
                         });
 
                         if (results.length > 0) {
