@@ -11,6 +11,7 @@ import { parseDLBarcode } from './dlBarcodeParser';
 type BarcodeResult = {
     rawValue: string;
     format: string;
+    bytes: Uint8Array;
 };
 
 function BarcodeScanner() {
@@ -123,6 +124,7 @@ function BarcodeScanner() {
                             setResult({
                                 rawValue: decoded.text,
                                 format: decoded.format,
+                                bytes: decoded.bytes,
                             });
                             stopCamera();
                             return;
@@ -226,6 +228,14 @@ function BarcodeScanner() {
                                 </TmTypography>
                                 <TmTypography variant='body1' testid='barcodeScannerResultValue' sx={{ mt: 1, wordBreak: 'break-all' }}>
                                     {result.rawValue}
+                                </TmTypography>
+                            </Stack>
+                            <Stack>
+                                <TmTypography variant='body1' testid='barcodeScannerResultRawBytesTitle' color='textSecondary'>
+                                    Raw Bytes:
+                                </TmTypography>
+                                <TmTypography variant='body2' testid='barcodeScannerResultRawBytes' sx={{ mt: 1, wordBreak: 'break-all', fontFamily: 'monospace' }}>
+                                    {Array.from(result.bytes).map(b => b.toString(16).padStart(2, '0')).join(' ')}
                                 </TmTypography>
                             </Stack>
                             <Stack>
