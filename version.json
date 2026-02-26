@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "82a2a76c868e8b9635cb2ac136810ce4e1f75412",
-        "shortHash": "82a2a76",
-        "message": "Optimize camera",
-        "date": "2026-02-26T23:41:24+02:00"
+        "latestCommit": "aeab6dccd369150bc05cbe68db0c841b616b1a7c",
+        "shortHash": "aeab6dc",
+        "message": "Optimize camera undo cropped ROI",
+        "date": "2026-02-26T23:46:29+02:00"
     }
 }
