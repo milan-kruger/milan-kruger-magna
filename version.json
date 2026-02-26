@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "0d14b0698285826c0bc6676225e4e0f6596a6887",
-        "shortHash": "0d14b06",
-        "message": "Added in changes",
-        "date": "2026-02-26T23:32:28+02:00"
+        "latestCommit": "82a2a76c868e8b9635cb2ac136810ce4e1f75412",
+        "shortHash": "82a2a76",
+        "message": "Optimize camera",
+        "date": "2026-02-26T23:41:24+02:00"
     }
 }
