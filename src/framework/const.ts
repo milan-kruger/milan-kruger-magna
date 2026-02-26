@@ -1,4 +1,5 @@
-// import.meta.env.BASE_URL is injected by Vite from the --base flag (prod)
-// or server.base (dev). Strip the trailing slash for use as a router basename
-// and fetch prefix.
-export const BASE_URL = (import.meta.env.BASE_URL ?? '/transgressions/').replace(/\/$/, '');
+// import.meta.env.BASE_URL is injected by Vite's --base flag at build time.
+// In dev it is always '/', so fall back to '/transgressions' to keep
+// localhost:3000/transgressions working unchanged.
+const viteBase = import.meta.env.BASE_URL ?? '/';
+export const BASE_URL = viteBase === '/' ? '/transgressions' : viteBase.replace(/\/$/, '');
