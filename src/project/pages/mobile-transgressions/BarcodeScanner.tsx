@@ -100,7 +100,7 @@ function BarcodeScanner() {
     const streamRef = useRef<MediaStream | null>(null);
     const scanTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
-    const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
+//     const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
     const failedAttemptsRef = useRef<number>(0);
 
     const [debugInfo, setDebugInfo] = useState({
@@ -152,12 +152,14 @@ function BarcodeScanner() {
             await videoRef.current.play();
             setScanning(true);
 
-            if (!canvasRef.current) {
-                canvasRef.current = document.createElement('canvas');
-                ctxRef.current = canvasRef.current.getContext('2d', { willReadFrequently: true })!;
-            }
             const canvas = canvasRef.current;
-            const ctx = ctxRef.current!;
+            if (!canvas) return;
+
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            if (!ctx) {
+                console.error('Could not get 2D context');
+                return;
+            }
 
             const SCAN_INTERVAL_MS = 120;
 
