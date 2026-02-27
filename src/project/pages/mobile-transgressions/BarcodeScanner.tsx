@@ -144,18 +144,7 @@ function BarcodeScanner() {
                     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
                     try {
-                        const cropWidth = canvas.width * 0.8;
-                        const cropHeight = canvas.height * 0.4;
-
-                        const sx = (canvas.width - cropWidth) / 2;
-                        const sy = (canvas.height - cropHeight) / 2;
-
-                        const rawImageData = ctx.getImageData(
-                          sx,
-                          sy,
-                          cropWidth,
-                          cropHeight
-                        );
+                        const rawImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                         const preprocessedGrey = preprocessGreyscale(rawImageData, failedAttemptsRef.current);
 //                         const upscaled = upscaleImageData(preprocessedGrey, 2);
                         const results = await readBarcodes(preprocessedGrey, READER_OPTIONS);
