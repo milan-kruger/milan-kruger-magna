@@ -166,8 +166,11 @@ function BarcodeScanner() {
                 if (!video || !streamRef.current) return;
 
                 if (video.readyState >= video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
+
                     canvas.width = video.videoWidth;
                     canvas.height = video.videoHeight;
+
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                     // ----- DEBUG OVERLAY -----
                     const cropWidth = canvas.width * 0.85;
                     const cropHeight = canvas.height * 0.45;
@@ -184,7 +187,6 @@ function BarcodeScanner() {
                     ctx.strokeStyle = 'lime';
                     ctx.lineWidth = 3;
                     ctx.strokeRect(sx, sy, cropWidth, cropHeight);
-
                     try {
                         const cropWidth = canvas.width * 0.85;
                         const cropHeight = canvas.height * 0.45;
@@ -273,6 +275,12 @@ function BarcodeScanner() {
             )}
 
             <Box width='100%' maxWidth={500} display={scanning ? 'block' : 'none'}>
+              <video
+                ref={videoRef}
+                style={{ display: 'none' }}
+                playsInline
+                muted
+              />
                 <canvas
                   ref={canvasRef}
                   style={{
