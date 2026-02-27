@@ -4,20 +4,20 @@
  * The raw text is %-delimited, e.g.:
  *   %MVL1CC97%0121%5001A1J5%1%5001005DCVK1%N23937W%RYF777H%Pick-up%DAIHATSU%OTHER%White%MHKT3CA100K002307%DBZ6391%2027-01-31%
  *
- * Known field layout (0-indexed after splitting on %):
- *   [0]  Reference code 1
- *   [1]  Reference code 2
- *   [2]  Reference code 3
- *   [3]  Flag
- *   [4]  Reference code 4
- *   [5]  Registration number
- *   [6]  Reference code 5
- *   [7]  Vehicle type (e.g. Pick-up, Sedan)
+ * Confirmed field layout (0-indexed after splitting on %):
+ *   [0]  Format identifier (e.g. MVL1CC97)
+ *   [1]  Registering authority code
+ *   [2]  Transaction / control reference
+ *   [3]  Vehicle category flag
+ *   [4]  Licence disc number (unique disc ID)
+ *   [5]  Registration number (number plate)
+ *   [6]  Vehicle register number (internal reference)
+ *   [7]  Vehicle type / body type (e.g. Pick-up, Sedan)
  *   [8]  Make (e.g. DAIHATSU, TOYOTA)
  *   [9]  Model / variant
  *   [10] Colour
- *   [11] VIN / Chassis number
- *   [12] Licence disc number
+ *   [11] VIN / chassis number
+ *   [12] Engine number
  *   [13] Expiry date (YYYY-MM-DD)
  */
 
@@ -59,7 +59,8 @@ export function parseCarDiskBarcode(rawValue: string): ParsedDLBarcode {
     add('Model', parts[9]);
     add('Colour', parts[10]);
     add('VIN', parts[11]);
-    add('Licence Disc Number', parts[12]);
+    add('Engine Number', parts[12]);
+    add('Licence Disc Number', parts[4]);
     add('Expiry Date', parts[13]);
 
     return { parsed: fields.length > 0, fields };
