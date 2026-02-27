@@ -65,7 +65,7 @@ const READER_CONFIGS: ReaderOptions[] = [
 // Much faster scan intervals
 const BASE_SCAN_INTERVAL = 16; // ~60fps
 const MAX_SCAN_INTERVAL = 100; // 10fps minimum
-const CONCURRENT_SCANS = 3; // Number of concurrent scan attempts
+const CONCURRENT_SCANS = 5; // Number of concurrent scan attempts
 
 // Warm up WASM with multiple formats
 const _wasmReady: Promise<void> = (async () => {
@@ -218,9 +218,9 @@ function BarcodeScanner() {
 
         // Prepare multiple processing sizes for concurrent scanning
         const processingSizes = [
-            { width: 320, height: 160 }, // Very fast
-            { width: 480, height: 240 }, // Medium
-            { width: 640, height: 320 }, // Standard
+            { width: 640, height: 320 }, // Very fast
+            { width: 960, height: 480 }, // Medium
+            { width: 1280, height: 640 }, // Standard
         ];
 
         // Ensure we have enough offscreen canvases
