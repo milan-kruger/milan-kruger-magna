@@ -28,9 +28,9 @@ const useSessionTimeout = () => {
     const authToken = useAppSelector(selectAuthToken);
     const [showWarning, setShowWarning] = useState(false);
     const [remainingTime, setRemainingTime] = useState(0);
-    const timeoutRef = useRef<number>(undefined);
-    const warningRef = useRef<number>(undefined);
-    const countdownRef = useRef<number>(undefined);
+    const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+    const warningRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+    const countdownRef = useRef<ReturnType<typeof setInterval>>(undefined);
 
     const clearTimers = useCallback(() => {
         if (timeoutRef.current) globalThis.clearTimeout(timeoutRef.current);

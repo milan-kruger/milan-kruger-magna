@@ -156,7 +156,7 @@ async function loadImageData(absolutePath: string): Promise<ImageData> {
     if (!width || !height) throw new Error(`Could not read dimensions of ${absolutePath}`);
     const rawBuffer = await image.raw().toBuffer();
     const clampedArray = new Uint8ClampedArray(rawBuffer.buffer, rawBuffer.byteOffset, rawBuffer.byteLength);
-    return new ImageData(clampedArray, width, height);
+    return new ImageData(clampedArray as unknown as Uint8ClampedArray, width, height);
 }
 
 // ─── Collect image entries ──────────────────────────────────────────────────

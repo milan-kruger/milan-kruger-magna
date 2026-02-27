@@ -7,7 +7,7 @@ type Props = {
 }
 const TmReloadElement = ({ children, delay = 500, enableReload = true, showImidiately = false }: Props) => {
     const [showElement, setShowElement] = useState(true);
-    const timeoutRef = useRef<number | null>(null);
+    const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
         if (showImidiately) {

@@ -488,7 +488,7 @@ const DriverDetails = memo(
       invalidPrdpCode
     ]);
 
-    const [validateIdTimeout, setValidateIdTimeout] = useState<null | number>(null);
+    const [validateIdTimeout, setValidateIdTimeout] = useState<null | ReturnType<typeof setTimeout>>(null);
     const onValidateId = useCallback(() => {
       if (!formDriverIdNumber || !formDriverIdType || !formDriverCountryOfIssueByBirth) {
         return

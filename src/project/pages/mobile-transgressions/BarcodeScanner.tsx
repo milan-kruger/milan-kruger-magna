@@ -66,7 +66,7 @@ function BarcodeScanner() {
 
     const videoRef = useRef<HTMLVideoElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
-    const scanTimerRef = useRef<number>(0);
+    const scanTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
     const failedAttemptsRef = useRef<number>(0);
