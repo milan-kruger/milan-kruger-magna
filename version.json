@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "9bca02316fe1f892b4cddeea403a8a027656fb22",
-        "shortHash": "9bca023",
+        "latestCommit": "62c296d8520df2da9e1b411f2f2479213b336eb0",
+        "shortHash": "62c296d",
         "message": "Fixed camera",
-        "date": "2026-02-27T12:52:06+02:00"
+        "date": "2026-02-27T12:54:48+02:00"
     }
 }
