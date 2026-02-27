@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "83517f6c1e4531c39a0a0272dbc086f4030288d0",
-        "shortHash": "83517f6",
-        "message": "Added in white-black rebalance",
-        "date": "2026-02-27T00:00:20+02:00"
+        "latestCommit": "1d424890881f995c188ac64387330c853a249976",
+        "shortHash": "1d42489",
+        "message": "fixed stuff",
+        "date": "2026-02-27T03:03:16+02:00"
     }
 }
