@@ -21,12 +21,12 @@ const READER_OPTIONS: ReaderOptions = {
     tryHarder: true,
     tryRotate: true,
     tryInvert: false,
-    tryDownscale: true,
-    downscaleFactor: 3,
-    downscaleThreshold: 400,
+    tryDownscale: false,
+    downscaleFactor: 1,
+    downscaleThreshold: 0,
     tryDenoise: true,
     isPure: false,
-    binarizer: 'LocalAverage',
+    binarizer: 'GlobalHistogram',
     minLineCount: 2,
     textMode: 'Plain',
     maxNumberOfSymbols: 1,
@@ -41,6 +41,23 @@ const _wasmReady: Promise<void> = (async () => {
         // ignore — module is still cached for subsequent real calls
     }
 })();
+
+function upscaleImageData(imageData: ImageData, scale: number): ImageData {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d')!;
+  canvas.width = imageData.width;
+  canvas.height = imageData.height;
+  ctx.putImageData(imageData, 0, 0);
+
+  const scaledCanvas = document.createElement('canvas');
+  scaledCanvas.width = imageData.width * scale;
+  scaledCanvas.height = imageData.height * scale;
+  const scaledCtx = scaledCanvas.getContext('2d')!;
+  scaledCtx.imageSmoothingEnabled = false;
+  scaledCtx.drawImage(canvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
+
+  return scaledCtx.getImageData(0, 0, scaledCanvas.width, scaledCanvas.height);
+}
 
 function BarcodeScanner() {
     const { t } = useTranslation();
@@ -115,7 +132,7 @@ function BarcodeScanner() {
             const canvas = canvasRef.current;
             const ctx = ctxRef.current!;
 
-            const SCAN_INTERVAL_MS = 120;
+            const SCAN_INTERVAL_MS = 200;
 
             const scan = async () => {
                 const video = videoRef.current;
@@ -127,9 +144,21 @@ function BarcodeScanner() {
                     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
                     try {
-                        const rawImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                        const cropWidth = canvas.width * 0.8;
+                        const cropHeight = canvas.height * 0.4;
+
+                        const sx = (canvas.width - cropWidth) / 2;
+                        const sy = (canvas.height - cropHeight) / 2;
+
+                        const rawImageData = ctx.getImageData(
+                          sx,
+                          sy,
+                          cropWidth,
+                          cropHeight
+                        );
                         const preprocessedGrey = preprocessGreyscale(rawImageData, failedAttemptsRef.current);
-                        const results = await readBarcodes(preprocessedGrey, READER_OPTIONS);
+                        const upscaled = upscaleImageData(preprocessedGrey, 2);
+                        const results = await readBarcodes(upscaled, READER_OPTIONS);
 
                         if (results.length > 0) {
                             failedAttemptsRef.current = 0;
