@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "066e78be296b95be7203b2183e5cf38a391207c6",
-        "shortHash": "066e78b",
-        "message": "test",
-        "date": "2026-02-27T13:08:44+02:00"
+        "latestCommit": "7ea507e7fbbe874c656698e4fcfb2e1a1f344a3d",
+        "shortHash": "7ea507e",
+        "message": "addded in globalhistogram binarizer",
+        "date": "2026-02-27T13:12:37+02:00"
     }
 }
