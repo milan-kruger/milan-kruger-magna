@@ -42,22 +42,22 @@ const _wasmReady: Promise<void> = (async () => {
     }
 })();
 
-function upscaleImageData(imageData: ImageData, scale: number): ImageData {
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d')!;
-  canvas.width = imageData.width;
-  canvas.height = imageData.height;
-  ctx.putImageData(imageData, 0, 0);
-
-  const scaledCanvas = document.createElement('canvas');
-  scaledCanvas.width = imageData.width * scale;
-  scaledCanvas.height = imageData.height * scale;
-  const scaledCtx = scaledCanvas.getContext('2d')!;
-  scaledCtx.imageSmoothingEnabled = false;
-  scaledCtx.drawImage(canvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
-
-  return scaledCtx.getImageData(0, 0, scaledCanvas.width, scaledCanvas.height);
-}
+// function upscaleImageData(imageData: ImageData, scale: number): ImageData {
+//   const canvas = document.createElement('canvas');
+//   const ctx = canvas.getContext('2d')!;
+//   canvas.width = imageData.width;
+//   canvas.height = imageData.height;
+//   ctx.putImageData(imageData, 0, 0);
+//
+//   const scaledCanvas = document.createElement('canvas');
+//   scaledCanvas.width = imageData.width * scale;
+//   scaledCanvas.height = imageData.height * scale;
+//   const scaledCtx = scaledCanvas.getContext('2d')!;
+//   scaledCtx.imageSmoothingEnabled = false;
+//   scaledCtx.drawImage(canvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
+//
+//   return scaledCtx.getImageData(0, 0, scaledCanvas.width, scaledCanvas.height);
+// }
 
 function BarcodeScanner() {
     const { t } = useTranslation();
@@ -157,8 +157,8 @@ function BarcodeScanner() {
                           cropHeight
                         );
                         const preprocessedGrey = preprocessGreyscale(rawImageData, failedAttemptsRef.current);
-                        const upscaled = upscaleImageData(preprocessedGrey, 2);
-                        const results = await readBarcodes(upscaled, READER_OPTIONS);
+//                         const upscaled = upscaleImageData(preprocessedGrey, 2);
+                        const results = await readBarcodes(preprocessedGrey, READER_OPTIONS);
 
                         if (results.length > 0) {
                             failedAttemptsRef.current = 0;
