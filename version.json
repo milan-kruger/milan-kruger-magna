@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "b91b03a8b3f6b74146423c85de33205ae86432dc",
-        "shortHash": "b91b03a",
-        "message": "Added in threshold",
-        "date": "2026-02-27T10:41:04+02:00"
+        "latestCommit": "78770641229f6b58986d2a872ebf8d6cdf7cadf7",
+        "shortHash": "7877064",
+        "message": "Fixed stuff",
+        "date": "2026-02-27T10:47:47+02:00"
     }
 }
