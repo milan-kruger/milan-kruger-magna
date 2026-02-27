@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "94e885e28c11c6b2fa4b1444385d6db3d5dc0be3",
-        "shortHash": "94e885e",
-        "message": "Fixed camera",
-        "date": "2026-02-27T12:42:45+02:00"
+        "latestCommit": "65827cc57089595788ee0c6f394c165b156feb13",
+        "shortHash": "65827cc",
+        "message": "Merge pull request #1 from milan-kruger/detached",
+        "date": "2026-02-27T12:50:43+02:00"
     }
 }
