@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "f1f3f70e28bc739fba3ecd5041b0b59d75048ecd",
-        "shortHash": "f1f3f70",
-        "message": "Fixed stuff",
-        "date": "2026-02-27T13:52:31+02:00"
+        "latestCommit": "40c43806c1d364afed1ba5b38111a489f8c26c88",
+        "shortHash": "40c4380",
+        "message": "Added in visual clues",
+        "date": "2026-02-27T14:09:01+02:00"
     }
 }
