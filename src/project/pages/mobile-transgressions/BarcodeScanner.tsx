@@ -24,7 +24,7 @@ const READER_OPTIONS: ReaderOptions = {
     tryDownscale: false,
     tryDenoise: true,
     isPure: false,
-    binarizer: 'LocalAverage',
+    binarizer: 'GlobalHistogram',
     minLineCount: 2,
     textMode: 'Plain',
     maxNumberOfSymbols: 1,
