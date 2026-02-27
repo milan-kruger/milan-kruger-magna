@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "b36717f9f405d5209543bb89bb4baf28fa9009cb",
-        "shortHash": "b36717f",
-        "message": "Added in upscale, and made binarizer local average",
-        "date": "2026-02-27T13:24:07+02:00"
+        "latestCommit": "4a39b6c1caf36dbba62649a7634da61527c00589",
+        "shortHash": "4a39b6c",
+        "message": "Fixed html",
+        "date": "2026-02-27T13:41:15+02:00"
     }
 }
