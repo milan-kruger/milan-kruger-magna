@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "5ac6daa29eea49a6ede7fb971f6d3c0c37b469f0",
-        "shortHash": "5ac6daa",
-        "message": "Added in try Invert , added in cropped region , removed minLinecount",
-        "date": "2026-02-27T13:19:13+02:00"
+        "latestCommit": "b36717f9f405d5209543bb89bb4baf28fa9009cb",
+        "shortHash": "b36717f",
+        "message": "Added in upscale, and made binarizer local average",
+        "date": "2026-02-27T13:24:07+02:00"
     }
 }
