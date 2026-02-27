@@ -36,3 +36,4 @@ stats.html
 **/__screenshots__/**
 **/*.config.ts.timestamp-*
 nul
+barcode-results.json

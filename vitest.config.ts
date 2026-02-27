@@ -13,7 +13,12 @@ export default defineConfig({
             // https://github.com/vitest-dev/vitest/issues/8745
             'src/project/_test/hooks/AdjudicateSubmissionManager.test.tsx',
             'src/project/_test/pages/**/*.test.tsx',
-            'src/project/_test/components/**/*.test.tsx'
+            'src/project/_test/components/**/*.test.tsx',
+            // Brute-force barcode research — generates ~146k test combos that exceed
+            // WebSocket payload limits in browser mode. Run explicitly with:
+            //   npx vitest run --config vitest.barcode-research.config.ts
+            //   OR: npm run barcode:research
+            'src/project/pages/mobile-transgressions/imagePreprocessingRealImages.test.tsx'
         ],
         setupFiles: ['./vitest-setup-file.ts'],
         fileParallelism: false, // disable parallelization as running on multiple threads can cause test failures

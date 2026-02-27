@@ -7,6 +7,7 @@ import TmIconButton from '../../../framework/components/button/TmIconButton';
 import TmTypography from '../../../framework/components/typography/TmTypography';
 import { readBarcodes, type ReaderOptions } from 'zxing-wasm/reader';
 import { parseDLBarcode } from './dlBarcodeParser';
+import { preprocessGreyscale } from './imagePreprocessing';
 
 type BarcodeResult = {
     rawValue: string;
@@ -32,95 +33,6 @@ const READER_OPTIONS: ReaderOptions = {
     returnErrors: false,
 };
 
-/**
- * Greyscale preprocessing levels — each more aggressive than the last.
- * The level is chosen based on how many consecutive frames failed to decode.
- *
- * Every level ≥ 1 first performs per-channel white-balance normalisation:
- * the darkest and lightest R, G, B values are found and each channel is
- * independently stretched to [0…255].  This neutralises colour casts from
- * warm/cool/fluorescent lighting so a yellowish "white" becomes true white
- * before greyscale conversion.
- *
- *  0 – no preprocessing (raw colour frame)
- *  1 – white-balance + simple luminance greyscale
- *  2 – white-balance + greyscale + S-curve contrast push (gentle)
- *  3 – white-balance + greyscale + S-curve contrast push (heavy) + binary threshold
- *
- * The cycle repeats so every 4th frame is raw again, giving the decoder a
- * chance with the original data before re-escalating.
- */
-const GREYSCALE_LEVELS = 4;
-
-function preprocessGreyscale(imageData: ImageData, failedAttempts: number): ImageData {
-    const level = failedAttempts % GREYSCALE_LEVELS;
-
-    // Level 0 — pass-through
-    if (level === 0) return imageData;
-
-    const { data, width, height } = imageData;
-
-    // ── Pass 1: per-channel min/max to detect lighting colour cast ──
-    // e.g. warm light makes "white" ≈ (240, 230, 180) and "black" ≈ (40, 35, 20)
-    // By stretching each channel independently we normalise the white-balance
-    // so yellowish whites become true 255,255,255 before greyscale conversion.
-    let minR = 255, maxR = 0;
-    let minG = 255, maxG = 0;
-    let minB = 255, maxB = 0;
-
-    for (let i = 0; i < data.length; i += 4) {
-        const r = data[i], g = data[i + 1], b = data[i + 2];
-        if (r < minR) minR = r; if (r > maxR) maxR = r;
-        if (g < minG) minG = g; if (g > maxG) maxG = g;
-        if (b < minB) minB = b; if (b > maxB) maxB = b;
-    }
-
-    // Per-channel scale factors (avoid division by zero for flat channels)
-    const rangeR = maxR - minR; const scaleR = rangeR > 1 ? 255 / rangeR : 1;
-    const rangeG = maxG - minG; const scaleG = rangeG > 1 ? 255 / rangeG : 1;
-    const rangeB = maxB - minB; const scaleB = rangeB > 1 ? 255 / rangeB : 1;
-
-    // ── Pass 2: white-balance → greyscale → escalating contrast ──
-    const out = new ImageData(new Uint8ClampedArray(data), width, height);
-    const d = out.data;
-
-    for (let i = 0; i < d.length; i += 4) {
-        // White-balance: stretch each channel from its own [min…max] → [0…255]
-        // This removes colour casts from warm/cool/fluorescent lighting so that
-        // the barcode's "white" is mapped to true white regardless of light colour.
-        const nr = (d[i]     - minR) * scaleR;
-        const ng = (d[i + 1] - minG) * scaleG;
-        const nb = (d[i + 2] - minB) * scaleB;
-
-        // ITU-R BT.709 luminance on the corrected channels
-        let lum = 0.2126 * nr + 0.7152 * ng + 0.0722 * nb;
-
-        if (level >= 2) {
-            // S-curve contrast push — widens the gap between dark and light
-            const norm = lum / 255;
-            // Strength increases with level: gentle at 2, aggressive at 3+
-            const strength = level === 2 ? 0.5 : 1.0;
-            // Blend between linear (norm) and S-curve
-            const sCurve = norm < 0.5
-                ? 2 * norm * norm
-                : 1 - 2 * (1 - norm) * (1 - norm);
-            lum = (norm + (sCurve - norm) * strength) * 255;
-        }
-
-        if (level >= 3) {
-            // Hard binary threshold — pure black-and-white for maximum edge contrast
-            lum = lum < 128 ? 0 : 255;
-        }
-
-        // Clamp
-        lum = lum < 0 ? 0 : lum > 255 ? 255 : lum;
-
-        d[i] = d[i + 1] = d[i + 2] = lum;
-        // alpha (d[i+3]) stays unchanged
-    }
-
-    return out;
-}
 
 /**
  * Pre-warm the WASM module at import time so the binary is fetched,
