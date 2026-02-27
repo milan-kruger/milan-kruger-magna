@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "71421c093b46dafee39edf0f76402933fe674403",
-        "shortHash": "71421c0",
-        "message": "Added back in parsed Data",
-        "date": "2026-02-27T14:37:01+02:00"
+        "latestCommit": "211a90fcf9d86efa9bdfdec3695be04daf9a1460",
+        "shortHash": "211a90f",
+        "message": "Fixed format",
+        "date": "2026-02-27T14:45:39+02:00"
     }
 }
