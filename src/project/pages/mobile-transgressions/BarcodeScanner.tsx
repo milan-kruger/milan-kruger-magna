@@ -20,12 +20,11 @@ const READER_OPTIONS: ReaderOptions = {
     formats: ['PDF417'],
     tryHarder: true,
     tryRotate: true,
-    tryInvert: false,
+    tryInvert: true,
     tryDownscale: false,
     tryDenoise: true,
     isPure: false,
     binarizer: 'GlobalHistogram',
-    minLineCount: 2,
     textMode: 'Plain',
     maxNumberOfSymbols: 1,
     returnErrors: false,
@@ -125,7 +124,19 @@ function BarcodeScanner() {
                     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
                     try {
-                        const rawImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                        const cropWidth = canvas.width * 0.85;
+                        const cropHeight = canvas.height * 0.45;
+
+                        // Bias downward (PDF417 is bottom of licence)
+                        const sx = (canvas.width - cropWidth) / 2;
+                        const sy = canvas.height * 0.4;
+
+                        const rawImageData = ctx.getImageData(
+                          sx,
+                          sy,
+                          cropWidth,
+                          cropHeight
+                        );
                         const preprocessedGrey = preprocessGreyscale(rawImageData, failedAttemptsRef.current);
                         const results = await readBarcodes(preprocessedGrey, READER_OPTIONS);
 
