@@ -307,7 +307,7 @@ function BarcodeScanner() {
                         maxHeight='60vh'
                         overflow='auto'
                     >
-                    <TmTypography variant="body2" color="textSecondary">
+                    <TmTypography variant="body2" testid='barcodeScannerResultFormat' color="textSecondary">
                       Failures: {debugInfo.failedAttempts}
                     </TmTypography>
                         <Stack gap={10}>
