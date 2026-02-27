@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "8389d526edfdbae93fe6982873e2f1ff6069a296",
-        "shortHash": "8389d52",
-        "message": "merged in annes code",
-        "date": "2026-02-27T15:34:31+02:00"
+        "latestCommit": "6c7c0322a5e14c8de6dc4000af85597237d05979",
+        "shortHash": "6c7c032",
+        "message": "Fixed bug",
+        "date": "2026-02-27T15:39:54+02:00"
     }
 }
