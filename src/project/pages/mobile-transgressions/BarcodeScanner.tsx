@@ -8,7 +8,7 @@ import TmTypography from '../../../framework/components/typography/TmTypography'
 import { readBarcodes, type ReaderOptions } from 'zxing-wasm/reader';
 import { parseDLBarcode } from './dlBarcodeParser';
 import { preprocessGreyscale , applyBinaryThreshold } from './imagePreprocessing';
-import { deskew } from './deskew';
+//import { deskew } from './deskew';
 
 type BarcodeResult = {
     rawValue: string;
@@ -141,8 +141,8 @@ function BarcodeScanner() {
                     try {
                         const rawImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                         const preprocessedGrey = preprocessGreyscale(rawImageData, failedAttemptsRef.current);
-                        const preprocessedThreshold = applyBinaryThreshold(preprocessedGrey, 160 - failedAttemptsRef.current * 10);
-                        const { imageData } = deskew(preprocessedThreshold);
+                        const { imageData } = applyBinaryThreshold(preprocessedGrey, 160 - failedAttemptsRef.current * 5);
+//                         const { imageData } = deskew(preprocessedThreshold);
                         const results = await readBarcodes(imageData, READER_OPTIONS);
 
                         if (results.length > 0) {
