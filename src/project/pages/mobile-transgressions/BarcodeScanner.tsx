@@ -287,6 +287,9 @@ function BarcodeScanner() {
                     <TmTypography variant='body1' testid='barcodeScannerScanning'>
                         {t('barcodeScanner.scanning')}
                     </TmTypography>
+                                        <TmTypography variant='body1' testid='barcodeScannerScanning'>
+                                          Failures: {debugInfo.failedAttempts}
+                                        </TmTypography>
                     <TmIconButton testid='stopScanButton' onClick={stopCamera} color='error'>
                         <CancelIcon />
                     </TmIconButton>
