@@ -21,12 +21,12 @@ const READER_OPTIONS: ReaderOptions = {
     tryHarder: true,
     tryRotate: true,
     tryInvert: false,
-    tryDownscale: false,
-    downscaleFactor: 1,
-    downscaleThreshold: 0,
+    tryDownscale: true,
+    downscaleFactor: 3,
+    downscaleThreshold: 400,
     tryDenoise: true,
     isPure: false,
-    binarizer: 'GlobalHistogram',
+    binarizer: 'LocalAverage',
     minLineCount: 2,
     textMode: 'Plain',
     maxNumberOfSymbols: 1,
@@ -41,23 +41,6 @@ const _wasmReady: Promise<void> = (async () => {
         // ignore — module is still cached for subsequent real calls
     }
 })();
-
-// function upscaleImageData(imageData: ImageData, scale: number): ImageData {
-//   const canvas = document.createElement('canvas');
-//   const ctx = canvas.getContext('2d')!;
-//   canvas.width = imageData.width;
-//   canvas.height = imageData.height;
-//   ctx.putImageData(imageData, 0, 0);
-//
-//   const scaledCanvas = document.createElement('canvas');
-//   scaledCanvas.width = imageData.width * scale;
-//   scaledCanvas.height = imageData.height * scale;
-//   const scaledCtx = scaledCanvas.getContext('2d')!;
-//   scaledCtx.imageSmoothingEnabled = false;
-//   scaledCtx.drawImage(canvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
-//
-//   return scaledCtx.getImageData(0, 0, scaledCanvas.width, scaledCanvas.height);
-// }
 
 function BarcodeScanner() {
     const { t } = useTranslation();
@@ -132,7 +115,7 @@ function BarcodeScanner() {
             const canvas = canvasRef.current;
             const ctx = ctxRef.current!;
 
-            const SCAN_INTERVAL_MS = 200;
+            const SCAN_INTERVAL_MS = 120;
 
             const scan = async () => {
                 const video = videoRef.current;
@@ -146,7 +129,6 @@ function BarcodeScanner() {
                     try {
                         const rawImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                         const preprocessedGrey = preprocessGreyscale(rawImageData, failedAttemptsRef.current);
-//                         const upscaled = upscaleImageData(preprocessedGrey, 2);
                         const results = await readBarcodes(preprocessedGrey, READER_OPTIONS);
 
                         if (results.length > 0) {
