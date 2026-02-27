@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "7ea507e7fbbe874c656698e4fcfb2e1a1f344a3d",
-        "shortHash": "7ea507e",
-        "message": "addded in globalhistogram binarizer",
-        "date": "2026-02-27T13:12:37+02:00"
+        "latestCommit": "5ac6daa29eea49a6ede7fb971f6d3c0c37b469f0",
+        "shortHash": "5ac6daa",
+        "message": "Added in try Invert , added in cropped region , removed minLinecount",
+        "date": "2026-02-27T13:19:13+02:00"
     }
 }
