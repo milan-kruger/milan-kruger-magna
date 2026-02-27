@@ -141,9 +141,9 @@ function BarcodeScanner() {
                     try {
                         const rawImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                         const preprocessedGrey = preprocessGreyscale(rawImageData, failedAttemptsRef.current);
-                        const { imageData } = applyBinaryThreshold(preprocessedGrey, 160 - failedAttemptsRef.current * 5);
+                        const preprocessedThreshold = applyBinaryThreshold(preprocessedGrey, 160 - failedAttemptsRef.current * 5);
 //                         const { imageData } = deskew(preprocessedThreshold);
-                        const results = await readBarcodes(imageData, READER_OPTIONS);
+                        const results = await readBarcodes(preprocessedThreshold, READER_OPTIONS);
 
                         if (results.length > 0) {
                             failedAttemptsRef.current = 0;
