@@ -62,7 +62,7 @@ function BarcodeScanner() {
     const barcode = state.phase === 'result' ? state.barcode : null;
     const rawValue = barcode?.rawValue;
     const parsedBarcode = useMemo(() => {
-        if (!result) return null;
+        if (!rawValue) return null;
         if (isCarDiskBarcode(rawValue)) return parseCarDiskBarcode(rawValue);
         return parseDLBarcode(rawValue);
     }, [rawValue]);
