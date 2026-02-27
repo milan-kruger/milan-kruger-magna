@@ -218,9 +218,9 @@ function BarcodeScanner() {
 
         // Prepare multiple processing sizes for concurrent scanning
         const processingSizes = [
-            { width: 640, height: 320 }, // Very fast
-            { width: 960, height: 480 }, // Medium
-            { width: 1280, height: 640 }, // Standard
+            { width: 1280, height: 720 }, // Very fast
+            { width: 1920, height: 1080 }, // Medium
+            { width: 3840, height: 2160 }, // Standard
         ];
 
         // Ensure we have enough offscreen canvases
