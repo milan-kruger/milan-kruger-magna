@@ -473,29 +473,39 @@ function BarcodeScanner() {
                             </TmTypography>
                         )}
 
-                        {/* Parsed barcode data - BELOW THE BYTES */}
-                        {parsedBarcode && (
-                            <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
-                                <TmTypography
-                                    testid="barcodeScannerResultParsed"
-                                    variant="subtitle2"
-                                    color="primary"
-                                    sx={{ mb: 1 }}
-                                >
-                                    Parsed Data:
-                                </TmTypography>
-                                {Object.entries(parsedBarcode).map(([key, value]) => (
-                                    <TmTypography
-                                        key={key}
-                                        testid={`barcodeScannerField-${key}`}
-                                        variant="body2"
-                                        sx={{ mt: 0.5 }}
-                                    >
-                                        <strong>{key}:</strong> {String(value)}
-                                    </TmTypography>
-                                ))}
-                            </Box>
-                        )}
+          {/* Parsed barcode data - BELOW THE BYTES */}
+          {parsedBarcode && (
+              <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+                  <TmTypography
+                      variant='body1'
+                      testid='barcodeScannerResultDecodedTitle'
+                      color='textSecondary'
+                  >
+                      Decoded Value:
+                  </TmTypography>
+                  <Stack sx={{ mt: 1 }} gap={0.5} data-testid='barcodeScannerResultDecodedValue'>
+                      {parsedBarcode.parsed ? (
+                          parsedBarcode.fields.map(f => (
+                              <TmTypography
+                                  key={f.label}
+                                  testid={`barcodeScannerField-${f.label}`}
+                                  variant='body2'
+                              >
+                                  <strong>{f.label}:</strong> {f.value}
+                              </TmTypography>
+                          ))
+                      ) : (
+                          <TmTypography
+                              testid='barcodeScannerNoStructuredData'
+                              variant='body2'
+                              color='textSecondary'
+                          >
+                              No structured data detected
+                          </TmTypography>
+                      )}
+                  </Stack>
+              </Box>
+          )}
                     </Box>
 
                     <TmIconButton
