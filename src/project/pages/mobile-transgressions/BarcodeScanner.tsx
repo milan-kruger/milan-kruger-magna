@@ -9,36 +9,74 @@ import { readBarcodes, type ReaderOptions } from 'zxing-wasm/reader';
 import { preprocessGreyscale } from './imagePreprocessing';
 import { parseDLBarcode } from './dlBarcodeParser.ts';
 import { parseCarDiskBarcode, isCarDiskBarcode } from './carDiskBarcodeParser.ts';
+
 type BarcodeResult = {
     rawValue: string;
     format: string;
     bytes: Uint8Array;
 };
 
-// Optimized for PDF417 (driver's licenses)
-const READER_OPTIONS: ReaderOptions = {
-    formats: ['PDF417'],
-    tryHarder: false, // Keep false for performance
-    tryRotate: false,
-    tryInvert: false,
-    tryDownscale: true, // Enable downscaling for performance
-    tryDenoise: true, // Enable denoising for better PDF417 reading
-    isPure: false,
-    binarizer: 'GlobalHistogram', // Better for PDF417 than LocalAverage
-    textMode: 'Plain',
-    maxNumberOfSymbols: 1,
-    returnErrors: false,
-};
+// Multiple reader configurations for different scenarios
+const READER_CONFIGS: ReaderOptions[] = [
+    // Fast scan - minimal processing
+    {
+        formats: ['PDF417'],
+        tryHarder: false,
+        tryRotate: false,
+        tryInvert: false,
+        tryDownscale: true,
+        tryDenoise: false,
+        isPure: false,
+        binarizer: 'GlobalHistogram',
+        textMode: 'Plain',
+        maxNumberOfSymbols: 1,
+        returnErrors: false,
+    },
+    // Medium scan - with denoising
+    {
+        formats: ['PDF417'],
+        tryHarder: false,
+        tryRotate: false,
+        tryInvert: false,
+        tryDownscale: true,
+        tryDenoise: true,
+        isPure: false,
+        binarizer: 'GlobalHistogram',
+        textMode: 'Plain',
+        maxNumberOfSymbols: 1,
+        returnErrors: false,
+    },
+    // Thorough scan - try harder if needed
+    {
+        formats: ['PDF417'],
+        tryHarder: true,
+        tryRotate: true,
+        tryInvert: false,
+        tryDownscale: true,
+        tryDenoise: true,
+        isPure: false,
+        binarizer: 'GlobalHistogram',
+        textMode: 'Plain',
+        maxNumberOfSymbols: 1,
+        returnErrors: false,
+    }
+];
 
-// Adaptive scan frequency based on failures
-const BASE_SCAN_INTERVAL = 100; // ms
-const MAX_SCAN_INTERVAL = 500; // ms
+// Much faster scan intervals
+const BASE_SCAN_INTERVAL = 16; // ~60fps
+const MAX_SCAN_INTERVAL = 100; // 10fps minimum
+const CONCURRENT_SCANS = 3; // Number of concurrent scan attempts
 
-// Warm up WASM
+// Warm up WASM with multiple formats
 const _wasmReady: Promise<void> = (async () => {
     try {
-        const blank = new ImageData(2, 2); // Slightly larger for better warmup
-        await readBarcodes(blank, { formats: ['PDF417'], maxNumberOfSymbols: 1 });
+        // Warm up with multiple small images to initialize all paths
+        const blank1 = new ImageData(4, 4);
+        const blank2 = new ImageData(4, 4);
+        await Promise.allSettled([
+            readBarcodes(blank1, READER_CONFIGS[0]),
+            readBarcodes(blank2, READER_CONFIGS[1])
+        ]);
     } catch {
         // warm cache
     }
@@ -60,13 +98,15 @@ function BarcodeScanner() {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const lastScanTimeRef = useRef<number>(0);
     const failedAttemptsRef = useRef<number>(0);
-    const scanTimeoutRef = useRef<number | null>(null);
+    const frameCountRef = useRef<number>(0);
+    const scanResultsRef = useRef<BarcodeResult[]>([]);
+    const processingQueueRef = useRef<boolean>(false);
 
-    // Optimized canvas for cropping
-    const offscreenCanvasRef = useRef<HTMLCanvasElement | null>(null);
-    const offscreenCtxRef = useRef<CanvasRenderingContext2D | null>(null);
+    // Multiple offscreen canvases for concurrent processing
+    const offscreenCanvasesRef = useRef<HTMLCanvasElement[]>([]);
+    const offscreenContextsRef = useRef<CanvasRenderingContext2D[]>([]);
 
-    // Parse barcode when result changes - MOVED TO COMPONENT LEVEL
+    // Parse barcode when result changes
     const parsedBarcode = useMemo(() => {
         if (!result) return null;
         if (isCarDiskBarcode(result.rawValue)) return parseCarDiskBarcode(result.rawValue);
@@ -79,11 +119,6 @@ function BarcodeScanner() {
             animationRef.current = null;
         }
 
-        if (scanTimeoutRef.current) {
-            clearTimeout(scanTimeoutRef.current);
-            scanTimeoutRef.current = null;
-        }
-
         if (streamRef.current) {
             streamRef.current.getTracks().forEach(track => track.stop());
             streamRef.current = null;
@@ -93,153 +128,190 @@ function BarcodeScanner() {
             videoRef.current.srcObject = null;
         }
 
+        // Clean up offscreen canvases
+        offscreenCanvasesRef.current = [];
+        offscreenContextsRef.current = [];
+
         setScanning(false);
         setIsProcessing(false);
+        processingQueueRef.current = false;
     }, []);
 
-    // Memoize drawOverlay to prevent unnecessary recreations
+    // Optimized drawOverlay with minimal operations
     const drawOverlay = useCallback((canvas: HTMLCanvasElement, video: HTMLVideoElement) => {
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        // Clear canvas
+        // Clear and draw video frame
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        // Redraw video frame
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-        // Calculate crop region (same as in processFrame)
+        // Calculate crop region
         const cropWidth = Math.min(canvas.width * 0.9, 800);
         const cropHeight = cropWidth * 0.5;
         const sx = (canvas.width - cropWidth) / 2;
         const sy = canvas.height * 0.35;
 
-        // Draw semi-transparent overlay
+        // Draw overlay with pre-calculated dimensions
         ctx.fillStyle = 'rgba(0,0,0,0.5)';
 
-        // Top
+        // Batch fill operations
         ctx.fillRect(0, 0, canvas.width, sy);
-        // Bottom
         ctx.fillRect(0, sy + cropHeight, canvas.width, canvas.height - (sy + cropHeight));
-        // Left
         ctx.fillRect(0, sy, sx, cropHeight);
-        // Right
         ctx.fillRect(sx + cropWidth, sy, canvas.width - (sx + cropWidth), cropHeight);
 
-        // Draw scan region border
+        // Draw border
         ctx.strokeStyle = failedAttemptsRef.current > 10 ? 'orange' : 'lime';
         ctx.lineWidth = 3;
         ctx.setLineDash([10, 5]);
         ctx.strokeRect(sx, sy, cropWidth, cropHeight);
         ctx.setLineDash([]);
-    }, []); // No dependencies needed as it uses refs
+    }, []);
 
-    const processFrame = useCallback(async () => {
+    // Concurrent frame processing
+    const processFrameConcurrent = useCallback(async () => {
         const video = videoRef.current;
         const canvas = canvasRef.current;
-        const offscreen = offscreenCanvasRef.current;
-        const offscreenCtx = offscreenCtxRef.current;
 
-        if (!video || !canvas || !offscreen || !offscreenCtx || !streamRef.current) {
+        if (!video || !canvas || !streamRef.current || processingQueueRef.current) {
+            animationRef.current = requestAnimationFrame(processFrameConcurrent);
             return;
         }
 
         if (video.readyState < video.HAVE_ENOUGH_DATA) {
-            animationRef.current = requestAnimationFrame(processFrame);
+            animationRef.current = requestAnimationFrame(processFrameConcurrent);
             return;
         }
 
-        // Throttle scan rate based on failures
+        // Throttle based on failures, but much faster
         const now = Date.now();
         const scanInterval = Math.min(
-            BASE_SCAN_INTERVAL + failedAttemptsRef.current * 20,
+            BASE_SCAN_INTERVAL + failedAttemptsRef.current,
             MAX_SCAN_INTERVAL
         );
 
-        if (now - lastScanTimeRef.current < scanInterval || isProcessing) {
-            // Just draw overlay without processing
+        if (now - lastScanTimeRef.current < scanInterval) {
             drawOverlay(canvas, video);
-            animationRef.current = requestAnimationFrame(processFrame);
+            animationRef.current = requestAnimationFrame(processFrameConcurrent);
             return;
         }
 
-        setIsProcessing(true);
         lastScanTimeRef.current = now;
+        frameCountRef.current++;
+
+        // Set canvas dimensions
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx) return;
+
+        // Draw video frame
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        // Calculate crop region
+        const cropWidth = Math.min(canvas.width * 0.9, 800);
+        const cropHeight = cropWidth * 0.5;
+        const sx = (canvas.width - cropWidth) / 2;
+        const sy = canvas.height * 0.35;
+
+        // Prepare multiple processing sizes for concurrent scanning
+        const processingSizes = [
+            { width: 320, height: 160 }, // Very fast
+            { width: 480, height: 240 }, // Medium
+            { width: 640, height: 320 }, // Standard
+        ];
+
+        // Ensure we have enough offscreen canvases
+        while (offscreenCanvasesRef.current.length < CONCURRENT_SCANS) {
+            const offscreen = document.createElement('canvas');
+            const offscreenCtx = offscreen.getContext('2d', {
+                willReadFrequently: true,
+                alpha: false,
+            });
+            if (offscreenCtx) {
+                offscreenCanvasesRef.current.push(offscreen);
+                offscreenContextsRef.current.push(offscreenCtx);
+            }
+        }
+
+        // Queue concurrent scans
+        processingQueueRef.current = true;
+        setIsProcessing(true);
 
         try {
-            // Set canvas dimensions to match video
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
+            // Prepare image data for each size concurrently
+            const scanPromises = [];
 
-            const ctx = canvas.getContext('2d', { willReadFrequently: true });
-            if (!ctx) return;
+            for (let i = 0; i < CONCURRENT_SCANS; i++) {
+                const size = processingSizes[i % processingSizes.length];
+                const offscreenCanvas = offscreenCanvasesRef.current[i];
+                const offscreenCtx = offscreenContextsRef.current[i];
 
-            // Draw video frame
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                if (!offscreenCanvas || !offscreenCtx) continue;
 
-            // Calculate crop region optimized for driver's licenses
-            const cropWidth = Math.min(canvas.width * 0.9, 800); // Limit max size for performance
-            const cropHeight = cropWidth * 0.5; // PDF417 aspect ratio
-            const sx = (canvas.width - cropWidth) / 2;
-            const sy = canvas.height * 0.35; // Adjusted for better positioning
+                offscreenCanvas.width = size.width;
+                offscreenCanvas.height = size.height;
 
-            // Resize offscreen canvas for processing
-            // Use smaller dimensions for faster processing
-            const processingWidth = 640;
-            const processingHeight = (cropHeight / cropWidth) * processingWidth;
+                // Draw and scale in one operation
+                offscreenCtx.drawImage(
+                    canvas,
+                    sx, sy, cropWidth, cropHeight,
+                    0, 0, size.width, size.height
+                );
 
-            offscreen.width = processingWidth;
-            offscreen.height = processingHeight;
+                // Get image data
+                let imageData = offscreenCtx.getImageData(0, 0, size.width, size.height);
 
-            // Draw and scale in one operation
-            offscreenCtx.drawImage(
-                canvas,
-                sx, sy, cropWidth, cropHeight,
-                0, 0, processingWidth, processingHeight
-            );
+                // Apply preprocessing based on failure count
+                if (failedAttemptsRef.current > 5) {
+                    imageData = preprocessGreyscale(imageData, failedAttemptsRef.current);
+                }
 
-            // Get image data
-            let imageData = offscreenCtx.getImageData(
-                0, 0, processingWidth, processingHeight
-            );
+                // Use different reader configs for different scans
+                const configIndex = Math.min(i, READER_CONFIGS.length - 1);
 
-            // Preprocess with adaptive parameters
-            imageData = preprocessGreyscale(imageData, failedAttemptsRef.current);
-
-            // Attempt to read barcode
-            const results = await readBarcodes(imageData, READER_OPTIONS);
-
-            if (results.length > 0) {
-                const decoded = results[0];
-                setResult({
-                    rawValue: decoded.text,
-                    format: decoded.format,
-                    bytes: decoded.bytes,
-                });
-                stopCamera();
-                return;
+                scanPromises.push(
+                    readBarcodes(imageData, READER_CONFIGS[configIndex])
+                        .then(results => ({ results, configIndex }))
+                        .catch(() => ({ results: [], configIndex }))
+                );
             }
 
-            // Increment failures on no result
+            // Wait for all concurrent scans to complete
+            const scanResults = await Promise.all(scanPromises);
+
+            // Check if any scan found a barcode
+            for (const { results } of scanResults) {
+                if (results.length > 0) {
+                    const decoded = results[0];
+                    setResult({
+                        rawValue: decoded.text,
+                        format: decoded.format,
+                        bytes: decoded.bytes,
+                    });
+                    stopCamera();
+                    return;
+                }
+            }
+
+            // No barcode found - increment failures
             failedAttemptsRef.current += 1;
             setFailedAttempts(failedAttemptsRef.current);
 
         } catch (err) {
-            // Only increment on actual errors
             if (err instanceof Error && !err.message.includes('No barcode found')) {
                 failedAttemptsRef.current += 1;
                 setFailedAttempts(failedAttemptsRef.current);
             }
         } finally {
             setIsProcessing(false);
-
-            // Draw overlay
+            processingQueueRef.current = false;
             drawOverlay(canvas, video);
-
-            // Schedule next frame
-            animationRef.current = requestAnimationFrame(processFrame);
+            animationRef.current = requestAnimationFrame(processFrameConcurrent);
         }
-    }, [stopCamera, isProcessing, drawOverlay]);
+    }, [stopCamera, drawOverlay]);
 
     const startScanning = useCallback(async () => {
         setError(null);
@@ -247,19 +319,21 @@ function BarcodeScanner() {
         failedAttemptsRef.current = 0;
         setFailedAttempts(0);
         setIsProcessing(false);
+        processingQueueRef.current = false;
+        scanResultsRef.current = [];
 
         if (!videoRef.current) return;
 
         await _wasmReady;
 
         try {
-            // Request higher resolution for better PDF417 reading
+            // Request higher frame rate
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: {
                     facingMode: { ideal: 'environment' },
                     width: { min: 640, ideal: 1280, max: 1920 },
                     height: { min: 480, ideal: 720, max: 1080 },
-                    aspectRatio: { ideal: 4/3 },
+                    frameRate: { ideal: 30, max: 60 }, // Request higher FPS
                 },
             });
 
@@ -274,37 +348,36 @@ function BarcodeScanner() {
 
             await videoRef.current.play();
 
-            // Create optimized offscreen canvas
-            const offscreen = document.createElement('canvas');
-            const offscreenCtx = offscreen.getContext('2d', {
-                willReadFrequently: true,
-                alpha: false, // Disable alpha for performance
-            });
-
-            if (!offscreenCtx) return;
-
-            offscreenCanvasRef.current = offscreen;
-            offscreenCtxRef.current = offscreenCtx;
+            // Pre-create offscreen canvases
+            for (let i = 0; i < CONCURRENT_SCANS; i++) {
+                const offscreen = document.createElement('canvas');
+                const offscreenCtx = offscreen.getContext('2d', {
+                    willReadFrequently: true,
+                    alpha: false,
+                });
+                if (offscreenCtx) {
+                    offscreenCanvasesRef.current.push(offscreen);
+                    offscreenContextsRef.current.push(offscreenCtx);
+                }
+            }
 
             setScanning(true);
 
             // Start processing loop
-            animationRef.current = requestAnimationFrame(processFrame);
+            animationRef.current = requestAnimationFrame(processFrameConcurrent);
         } catch (err) {
             setError(t('barcodeScanner.cameraError') + (err instanceof Error ? `: ${err.message}` : ''));
             setScanning(false);
         }
-    }, [t, processFrame]);
+    }, [t, processFrameConcurrent]);
 
     useEffect(() => {
         return () => {
             stopCamera();
-            // Clean up offscreen canvas
-            offscreenCanvasRef.current = null;
-            offscreenCtxRef.current = null;
         };
     }, [stopCamera]);
 
+    // Rest of the JSX remains exactly the same...
     return (
         <Box
             display="flex"
@@ -441,7 +514,6 @@ function BarcodeScanner() {
                             {t('barcodeScanner.format')}: {result.format}
                         </TmTypography>
 
-                        {/* Raw value - MOVED ABOVE PARSED DATA */}
                         <TmTypography
                             testid="barcodeScannerResultRawValue"
                             variant="body2"
@@ -450,7 +522,6 @@ function BarcodeScanner() {
                             <strong>Raw Value:</strong> {result.rawValue}
                         </TmTypography>
 
-                        {/* Bytes display */}
                         {result.bytes.length > 0 && (
                             <TmTypography
                                 testid="barcodeScannerResultBytes"
@@ -473,39 +544,38 @@ function BarcodeScanner() {
                             </TmTypography>
                         )}
 
-          {/* Parsed barcode data - BELOW THE BYTES */}
-          {parsedBarcode && (
-              <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
-                  <TmTypography
-                      variant='body1'
-                      testid='barcodeScannerResultDecodedTitle'
-                      color='textSecondary'
-                  >
-                      Decoded Value:
-                  </TmTypography>
-                  <Stack sx={{ mt: 1 }} gap={0.5} data-testid='barcodeScannerResultDecodedValue'>
-                      {parsedBarcode.parsed ? (
-                          parsedBarcode.fields.map(f => (
-                              <TmTypography
-                                  key={f.label}
-                                  testid={`barcodeScannerField-${f.label}`}
-                                  variant='body2'
-                              >
-                                  <strong>{f.label}:</strong> {f.value}
-                              </TmTypography>
-                          ))
-                      ) : (
-                          <TmTypography
-                              testid='barcodeScannerNoStructuredData'
-                              variant='body2'
-                              color='textSecondary'
-                          >
-                              No structured data detected
-                          </TmTypography>
-                      )}
-                  </Stack>
-              </Box>
-          )}
+                        {parsedBarcode && (
+                            <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+                                <TmTypography
+                                    variant='body1'
+                                    testid='barcodeScannerResultDecodedTitle'
+                                    color='textSecondary'
+                                >
+                                    Decoded Value:
+                                </TmTypography>
+                                <Stack sx={{ mt: 1 }} gap={0.5} data-testid='barcodeScannerResultDecodedValue'>
+                                    {parsedBarcode.parsed ? (
+                                        parsedBarcode.fields.map(f => (
+                                            <TmTypography
+                                                key={f.label}
+                                                testid={`barcodeScannerField-${f.label}`}
+                                                variant='body2'
+                                            >
+                                                <strong>{f.label}:</strong> {f.value}
+                                            </TmTypography>
+                                        ))
+                                    ) : (
+                                        <TmTypography
+                                            testid='barcodeScannerNoStructuredData'
+                                            variant='body2'
+                                            color='textSecondary'
+                                        >
+                                            No structured data detected
+                                        </TmTypography>
+                                    )}
+                                </Stack>
+                            </Box>
+                        )}
                     </Box>
 
                     <TmIconButton
