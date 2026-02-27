@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "695ff937e377c29adc774dd8f847da5125f04d87",
-        "shortHash": "695ff93",
-        "message": "Added in deskews",
-        "date": "2026-02-27T10:31:56+02:00"
+        "latestCommit": "b91b03a8b3f6b74146423c85de33205ae86432dc",
+        "shortHash": "b91b03a",
+        "message": "Added in threshold",
+        "date": "2026-02-27T10:41:04+02:00"
     }
 }
