@@ -103,6 +103,10 @@ function BarcodeScanner() {
     const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
     const failedAttemptsRef = useRef<number>(0);
 
+    const [debugInfo, setDebugInfo] = useState({
+      failedAttempts: 0,
+    });
+
     const stopCamera = useCallback(() => {
         clearTimeout(scanTimerRef.current);
         if (streamRef.current) {
@@ -164,7 +168,22 @@ function BarcodeScanner() {
                 if (video.readyState >= video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
                     canvas.width = video.videoWidth;
                     canvas.height = video.videoHeight;
-                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    // ----- DEBUG OVERLAY -----
+                    const cropWidth = canvas.width * 0.85;
+                    const cropHeight = canvas.height * 0.45;
+
+                    const sx = (canvas.width - cropWidth) / 2;
+                    const sy = canvas.height * 0.4;
+
+                    // Draw semi-transparent mask outside crop
+                    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.clearRect(sx, sy, cropWidth, cropHeight);
+
+                    // Draw border
+                    ctx.strokeStyle = 'lime';
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(sx, sy, cropWidth, cropHeight);
 
                     try {
                         const cropWidth = canvas.width * 0.85;
@@ -192,6 +211,9 @@ function BarcodeScanner() {
                                 format: decoded.format,
                                 bytes: decoded.bytes,
                             });
+                          setDebugInfo({
+                            failedAttempts: failedAttemptsRef.current,
+                          });
                             stopCamera();
                             return;
                         }
@@ -251,17 +273,15 @@ function BarcodeScanner() {
             )}
 
             <Box width='100%' maxWidth={500} display={scanning ? 'block' : 'none'}>
-                <video
-                    ref={videoRef}
-                    style={{
-                        width: '100%',
-                        height: isPortrait ? '70vh' : 'auto',
-                        objectFit: 'contain',
-                        borderRadius: 8,
-                        display: 'block',
-                    }}
-                    playsInline
-                    muted
+                <canvas
+                  ref={canvasRef}
+                  style={{
+                    width: '100%',
+                    height: isPortrait ? '70vh' : 'auto',
+                    objectFit: 'contain',
+                    borderRadius: 8,
+                    display: 'block',
+                  }}
                 />
                 <Box textAlign='center' mt={2} display='flex' flexDirection='column' alignItems='center' gap={1}>
                     <TmTypography variant='body1' testid='barcodeScannerScanning'>
@@ -287,6 +307,9 @@ function BarcodeScanner() {
                         maxHeight='60vh'
                         overflow='auto'
                     >
+                    <TmTypography variant="body2" color="textSecondary">
+                      Failures: {debugInfo.failedAttempts}
+                    </TmTypography>
                         <Stack gap={10}>
                             <TmTypography variant='body2' testid='barcodeScannerResultFormat' color='textSecondary'>
                                 {t('barcodeScanner.format')}: {result.format}
