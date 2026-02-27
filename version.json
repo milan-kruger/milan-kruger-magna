@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "5df68147c6d4d42cb7961a20998644879a626db4",
-        "shortHash": "5df6814",
-        "message": "Fixed stuff",
-        "date": "2026-02-27T10:58:06+02:00"
+        "latestCommit": "24d86f7663f882e8c64de1f53eea717d308ec270",
+        "shortHash": "24d86f7",
+        "message": "Added in car disk",
+        "date": "2026-02-27T11:24:08+02:00"
     }
 }
