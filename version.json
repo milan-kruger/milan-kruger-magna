@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "d50c5efae7b800c311dce105b1b27c5b8b9e4297",
-        "shortHash": "d50c5ef",
-        "message": "Added in faster concurrent scans",
-        "date": "2026-02-27T14:51:54+02:00"
+        "latestCommit": "ba201a25876c31472821b71c2a20e0fafc3edf6b",
+        "shortHash": "ba201a2",
+        "message": "Fixed car disk code",
+        "date": "2026-02-27T14:57:59+02:00"
     }
 }
