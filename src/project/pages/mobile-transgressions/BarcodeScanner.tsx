@@ -1,6 +1,6 @@
 import CancelIcon from '@mui/icons-material/Cancel';
 import { BsUpcScan } from 'react-icons/bs';
-import { Box, useMediaQuery, CircularProgress } from '@mui/material';
+import { Box, useMediaQuery, Stack , CircularProgress } from '@mui/material';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import TmIconButton from '../../../framework/components/button/TmIconButton';
