@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "e71db6cae00d4b2d19e7e2fdaa3bd90542da1f4f",
-        "shortHash": "e71db6c",
-        "message": "Fixed cardisk parser",
-        "date": "2026-02-27T15:08:57+02:00"
+        "latestCommit": "ca6e6fbfb03b38f35aaa623c2ae633d2aeb959ab",
+        "shortHash": "ca6e6fb",
+        "message": "Improved resolution",
+        "date": "2026-02-27T15:25:31+02:00"
     }
 }
