@@ -7,7 +7,7 @@ import TmIconButton from '../../../framework/components/button/TmIconButton';
 import TmTypography from '../../../framework/components/typography/TmTypography';
 import { readBarcodes, type ReaderOptions } from 'zxing-wasm/reader';
 import { parseDLBarcode } from './dlBarcodeParser';
-
+import { parseCarDiskBarcode, isCarDiskBarcode } from './carDiskBarcodeParser';
 type BarcodeResult = {
     rawValue: string;
     format: string;
@@ -61,10 +61,11 @@ function BarcodeScanner() {
 
     const barcode = state.phase === 'result' ? state.barcode : null;
     const rawValue = barcode?.rawValue;
-    const parsedBarcode = useMemo(
-        () => (rawValue ? parseDLBarcode(rawValue) : null),
-        [rawValue]
-    );
+    const parsedBarcode = useMemo(() => {
+        if (!result) return null;
+        if (isCarDiskBarcode(rawValue)) return parseCarDiskBarcode(rawValue);
+        return parseDLBarcode(rawValue);
+    }, [rawValue]);
 
     const videoRef = useRef<HTMLVideoElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
