@@ -8,7 +8,6 @@ import TmTypography from '../../../framework/components/typography/TmTypography'
 import { readBarcodes, type ReaderOptions } from 'zxing-wasm/reader';
 import { parseDLBarcode } from './dlBarcodeParser';
 import { preprocessGreyscale } from './imagePreprocessing';
-//import { deskew } from './deskew';
 
 type BarcodeResult = {
     rawValue: string;
@@ -16,35 +15,25 @@ type BarcodeResult = {
     bytes: Uint8Array;
 };
 
-/** Shared reader options (allocated once) */
 const READER_OPTIONS: ReaderOptions = {
     formats: ['PDF417'],
     tryHarder: true,
     tryRotate: true,
-    tryInvert: false,        // printed barcodes don't need inversion — saves ~15-20%
+    tryInvert: false,
     tryDownscale: true,
-    downscaleFactor: 3,      // more aggressive downscale for faster decode
+    downscaleFactor: 3,
     downscaleThreshold: 400,
     tryDenoise: true,
     isPure: false,
     binarizer: 'LocalAverage',
-    minLineCount: 2,         // slightly lower → faster first-hit; still reliable for PDF417
+    minLineCount: 2,
     textMode: 'Plain',
     maxNumberOfSymbols: 1,
     returnErrors: false,
 };
 
-
-/**
- * Pre-warm the WASM module at import time so the binary is fetched,
- * compiled, and instantiated before the user ever taps "Scan".
- * The promise is intentionally fire-and-forget.
- */
 const _wasmReady: Promise<void> = (async () => {
     try {
-        // A minimal no-op call that forces the WASM module to load.
-        // 1×1 transparent ImageData won't find any barcode but will
-        // trigger download + compilation of the .wasm file.
         const blank = new ImageData(1, 1);
         await readBarcodes(blank, { formats: ['PDF417'], maxNumberOfSymbols: 1 });
     } catch {
@@ -91,7 +80,6 @@ function BarcodeScanner() {
 
         if (!videoRef.current) return;
 
-        // Ensure WASM is ready before we start scanning frames
         await _wasmReady;
 
         try {
@@ -100,7 +88,6 @@ function BarcodeScanner() {
                 stream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         facingMode: { exact: 'environment' },
-                        // 1080p is plenty for PDF417 and processes ~4× faster than 4K
                         width: { ideal: 1920 },
                         height: { ideal: 1080 },
                     },
@@ -119,7 +106,6 @@ function BarcodeScanner() {
             await videoRef.current.play();
             setScanning(true);
 
-            // Reuse a single canvas + context across frames to avoid GC pressure
             if (!canvasRef.current) {
                 canvasRef.current = document.createElement('canvas');
                 ctxRef.current = canvasRef.current.getContext('2d', { willReadFrequently: true })!;
@@ -127,7 +113,7 @@ function BarcodeScanner() {
             const canvas = canvasRef.current;
             const ctx = ctxRef.current!;
 
-            const SCAN_INTERVAL_MS = 120; // tighter loop since each frame is cheaper
+            const SCAN_INTERVAL_MS = 120;
 
             const scan = async () => {
                 const video = videoRef.current;
@@ -141,8 +127,6 @@ function BarcodeScanner() {
                     try {
                         const rawImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                         const preprocessedGrey = preprocessGreyscale(rawImageData, failedAttemptsRef.current);
-//                         const preprocessedThreshold = applyBinaryThreshold(preprocessedGrey, 160 - failedAttemptsRef.current * 5);
-//                         const { imageData } = deskew(preprocessedThreshold);
                         const results = await readBarcodes(preprocessedGrey, READER_OPTIONS);
 
                         if (results.length > 0) {

@@ -1,22 +1,9 @@
-/**
- * Composable image preprocessing steps for barcode scanning.
- *
- * Each function takes an ImageData and returns a **new** ImageData (non-mutating).
- * Steps can be chained in any order to explore which pipeline works best
- * under different lighting / resolution conditions.
- */
-
-// ─── Types ──────────────────────────────────────────────────────────────────
-
 export type ChannelMinMax = {
     minR: number; maxR: number;
     minG: number; maxG: number;
     minB: number; maxB: number;
 };
 
-// ─── Step 0: Channel statistics ─────────────────────────────────────────────
-
-/** Scan every pixel and return the per-channel min / max values. */
 export function findChannelMinMax(data: Uint8ClampedArray): ChannelMinMax {
     let minR = 255, maxR = 0;
     let minG = 255, maxG = 0;
@@ -32,16 +19,6 @@ export function findChannelMinMax(data: Uint8ClampedArray): ChannelMinMax {
     return { minR, maxR, minG, maxG, minB, maxB };
 }
 
-// ─── Step 1: White-balance ──────────────────────────────────────────────────
-
-/**
- * Per-channel histogram stretch: map each R, G, B channel from its own
- * [min…max] range to [0…255].  This neutralises colour casts from
- * warm / cool / fluorescent lighting.
- *
- * @param strength 1.0 = full stretch, <1 = softer, >1 = overshoot
- *                 (clips to 0–255 regardless)
- */
 export function whiteBalance(
     imageData: ImageData,
     minMax?: ChannelMinMax,
@@ -69,9 +46,6 @@ export function whiteBalance(
     return out;
 }
 
-// ─── Step 2: Greyscale ──────────────────────────────────────────────────────
-
-/** Convert to greyscale using ITU-R BT.709 luminance weights. */
 export function toGreyscale(imageData: ImageData): ImageData {
     const { data, width, height } = imageData;
     const out = new ImageData(new Uint8ClampedArray(data), width, height);
@@ -85,14 +59,6 @@ export function toGreyscale(imageData: ImageData): ImageData {
     return out;
 }
 
-// ─── Step 3: S-curve contrast ───────────────────────────────────────────────
-
-/**
- * Apply an S-curve to the luminance channel to widen the gap between
- * dark and light pixels.
- *
- * @param strength 0 = no change, 1 = full S-curve
- */
 export function applySCurveContrast(imageData: ImageData, strength: number = 0.5): ImageData {
     const { data, width, height } = imageData;
     const out = new ImageData(new Uint8ClampedArray(data), width, height);
@@ -115,13 +81,6 @@ function sCurveChannel(value: number, strength: number): number {
     return clamp((norm + (curved - norm) * strength) * 255);
 }
 
-// ─── Step 4: Binary threshold ───────────────────────────────────────────────
-
-/**
- * Hard black/white threshold — every pixel becomes 0 or 255.
- *
- * @param threshold cut-off value (0–255, default 128)
- */
 export function applyBinaryThreshold(imageData: ImageData, threshold: number = 128): ImageData {
     const { data, width, height } = imageData;
     const out = new ImageData(new Uint8ClampedArray(data), width, height);
@@ -135,16 +94,6 @@ export function applyBinaryThreshold(imageData: ImageData, threshold: number = 1
     return out;
 }
 
-// ─── Orchestrator (used at runtime) ─────────────────────────────────────────
-
-/**
- * Cycling preprocessor used in the live scan loop.
- *
- *  Level 0 – raw pass-through
- *  Level 1 – white-balance + greyscale
- *  Level 2 – white-balance + greyscale + S-curve (gentle)
- *  Level 3 – white-balance + greyscale + S-curve (heavy) + binary threshold
- */
 export const GREYSCALE_LEVELS = 4;
 
 export function preprocessGreyscale(imageData: ImageData, failedAttempts: number): ImageData {
@@ -167,8 +116,6 @@ export function preprocessGreyscale(imageData: ImageData, failedAttempts: number
 
     return result;
 }
-
-// ─── Utility ────────────────────────────────────────────────────────────────
 
 function clamp(v: number): number {
     return v < 0 ? 0 : v > 255 ? 255 : v;
