@@ -7,12 +7,13 @@
  *  1. Load every image from that folder
  *  2. Run curated preprocessing pipelines with relevant parameter combos
  *  3. Write full results to `barcode-results.json` (no large console output)
- *  4. Print only a compact summary to avoid WebSocket payload limits
+ *  4. Print a compact per-image summary + top-10 pipeline ranking
  *
- * By default uses a curated set of ~8 pipelines with coarse parameter grids
- * and early-exits after finding successful decodes per image (~50–100× faster).
+ * Uses a curated set of ~8 pipelines with coarse parameter grids for a
+ * total of ~65 combos per image (~2,535 for 39 images). All combos are
+ * tested exhaustively (no early termination).
  *
- * For full brute-force research, set FULL_SWEEP=true:
+ * For the full fine-grained parameter grid, set FULL_SWEEP=true:
  *   FULL_SWEEP=true npm run barcode:research
  *
  * Run with:
@@ -36,8 +37,6 @@ import sharp from 'sharp';
 
 const FULL_SWEEP = process.env.FULL_SWEEP === 'true';
 
-/** Max successful decodes per image before skipping remaining combos. 0 = no limit. */
-const EARLY_EXIT_COUNT = FULL_SWEEP ? 0 : 5;
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -204,10 +203,10 @@ describe('Real-image barcode preprocessing pipeline', () => {
         const totalCombos = imageEntries.length * totalCombosPerImage;
         console.log(
             `📸 ${imageEntries.length} images × ${totalCombosPerImage} combos/image = ${totalCombos} combos` +
-            (FULL_SWEEP ? ' (FULL_SWEEP)' : ` (early-exit after ${EARLY_EXIT_COUNT} successes/image)`),
+            (FULL_SWEEP ? ' (FULL_SWEEP)' : ''),
         );
 
-        // One test per image — inner loop over pipelines × params with early exit
+        // One test per image — inner loop over all pipelines × params
         test.concurrent.each(
             imageEntries.map(entry => [entry.name, entry] as const),
         )(
@@ -218,14 +217,13 @@ describe('Real-image barcode preprocessing pipeline', () => {
                 expect(imageData.height).toBeGreaterThan(0);
 
                 const imageResults: DecodeResult[] = [];
-                let successCount = 0;
 
-                // Helper: attempt decode and record result; returns true if early-exit triggered
+                // Helper: attempt decode and record result
                 const tryDecode = async (
                     processed: ImageData,
                     pipelineName: string,
                     params: PipelineParams,
-                ): Promise<boolean> => {
+                ): Promise<void> => {
                     let decoded = false;
                     let decodedText: string | null = null;
                     try {
@@ -233,13 +231,12 @@ describe('Real-image barcode preprocessing pipeline', () => {
                         if (barcodeResults.length > 0) {
                             decoded = true;
                             decodedText = barcodeResults[0].text;
-                            successCount++;
                         }
                     } catch {
                         // decode failed — that's fine
                     }
 
-                    const result: DecodeResult = {
+                    imageResults.push({
                         imageName: entry.name,
                         pipeline: pipelineName,
                         wbStrength: params.wbStrength,
@@ -247,32 +244,23 @@ describe('Real-image barcode preprocessing pipeline', () => {
                         threshold: params.threshold,
                         decoded,
                         decodedText,
-                    };
-                    imageResults.push(result);
-
-                    return EARLY_EXIT_COUNT > 0 && successCount >= EARLY_EXIT_COUNT;
+                    });
                 };
 
                 // 1. Try raw (no preprocessing)
                 const rawParams: PipelineParams = { wbStrength: 0, contrastStrength: 0, threshold: 0 };
-                let earlyExit = await tryDecode(imageData, '(raw — no preprocessing)', rawParams);
+                await tryDecode(imageData, '(raw — no preprocessing)', rawParams);
 
                 // 2. Try each curated pipeline × relevant params
-                if (!earlyExit) {
-                    outer:
-                    for (const pipeline of CURATED_PIPELINES) {
-                        const paramCombos = buildParamCombos(pipeline);
-                        for (const params of paramCombos) {
-                            // Apply preprocessing pipeline
-                            let processed = imageData;
-                            const steps = pipeline.steps.map(sf => sf.build(params));
-                            for (const step of steps) {
-                                processed = step(processed);
-                            }
-
-                            earlyExit = await tryDecode(processed, pipeline.name, params);
-                            if (earlyExit) break outer;
+                for (const pipeline of CURATED_PIPELINES) {
+                    const paramCombos = buildParamCombos(pipeline);
+                    for (const params of paramCombos) {
+                        let processed = imageData;
+                        const steps = pipeline.steps.map(sf => sf.build(params));
+                        for (const step of steps) {
+                            processed = step(processed);
                         }
+                        await tryDecode(processed, pipeline.name, params);
                     }
                 }
 
@@ -282,8 +270,7 @@ describe('Real-image barcode preprocessing pipeline', () => {
                 // Log compact per-image status
                 const imgDecoded = imageResults.filter(r => r.decoded).length;
                 const status = imgDecoded > 0 ? '✅' : '❌';
-                const skipped = earlyExit ? ` (early-exit, ${imageResults.length}/${totalCombosPerImage} tested)` : '';
-                console.log(`  ${status} ${entry.name}: ${imgDecoded}/${imageResults.length} decoded${skipped}`);
+                console.log(`  ${status} ${entry.name}: ${imgDecoded}/${imageResults.length} decoded`);
             },
             300_000, // 5 min per image
         );
@@ -309,9 +296,9 @@ describe('Real-image barcode preprocessing pipeline', () => {
                 console.log('⚠️  Could not write results file (browser mode). See summary below.');
             }
 
-            // Print only a compact summary (keeps IPC payload small)
+            // ── Per-image summary ───────────────────────────────────────
             const decoded = allResults.filter(r => r.decoded);
-            console.log(`✅ ${decoded.length}/${allResults.length} decoded (${((decoded.length / allResults.length) * 100).toFixed(1)}%)`);
+            console.log(`\n✅ ${decoded.length}/${allResults.length} decoded (${((decoded.length / allResults.length) * 100).toFixed(1)}%)\n`);
 
             const imageNames = [...new Set(allResults.map(r => r.imageName))];
             for (const imgName of imageNames) {
@@ -320,6 +307,71 @@ describe('Real-image barcode preprocessing pipeline', () => {
                 const status = imgDecoded.length > 0 ? '✅' : '❌';
                 console.log(`  ${status} ${imgName}: ${imgDecoded.length}/${imgResults.length}`);
             }
+
+            // ── Top 10 pipeline + param combinations ────────────────────
+            // A "pipeline combo" is the unique key of pipeline name + params.
+            // Rank by how many images each combo successfully decoded.
+            type PipelineComboKey = string;
+            const comboSuccessMap = new Map<PipelineComboKey, {
+                pipeline: string;
+                wbStrength: number;
+                contrastStrength: number;
+                threshold: number;
+                successCount: number;
+                totalImages: number;
+            }>();
+
+            for (const r of allResults) {
+                const key = `${r.pipeline}|wb=${r.wbStrength}|con=${r.contrastStrength}|thr=${r.threshold}`;
+                if (!comboSuccessMap.has(key)) {
+                    comboSuccessMap.set(key, {
+                        pipeline: r.pipeline,
+                        wbStrength: r.wbStrength,
+                        contrastStrength: r.contrastStrength,
+                        threshold: r.threshold,
+                        successCount: 0,
+                        totalImages: 0,
+                    });
+                }
+                const entry = comboSuccessMap.get(key)!;
+                entry.totalImages++;
+                if (r.decoded) entry.successCount++;
+            }
+
+            const ranked = [...comboSuccessMap.values()]
+                .sort((a, b) => b.successCount - a.successCount);
+
+            const top10 = ranked.slice(0, 10);
+
+            console.log(`\n🏆 Top 10 pipeline + parameter combinations (by images decoded):\n`);
+            console.log(
+                '  Rank  │ Decoded │ Pipeline                                          │ WB   │ Con  │ Thr',
+            );
+            console.log(
+                '  ──────┼─────────┼───────────────────────────────────────────────────┼──────┼──────┼─────',
+            );
+            top10.forEach((combo, i) => {
+                const rank   = String(i + 1).padStart(4);
+                const score  = `${combo.successCount}/${combo.totalImages}`.padStart(7);
+                const pipe   = combo.pipeline.padEnd(49);
+                const wb     = String(combo.wbStrength).padStart(4);
+                const con    = String(combo.contrastStrength).padStart(4);
+                const thr    = String(combo.threshold).padStart(3);
+                console.log(`  ${rank}  │ ${score} │ ${pipe} │ ${wb} │ ${con} │ ${thr}`);
+            });
+
+            // Also log the worst-performing combos for completeness
+            const bottom5 = ranked.slice(-5).reverse();
+            console.log(`\n📉 Bottom 5 pipeline + parameter combinations:\n`);
+            bottom5.forEach((combo, i) => {
+                const rank   = String(ranked.length - 4 + i).padStart(4);
+                const score  = `${combo.successCount}/${combo.totalImages}`.padStart(7);
+                const pipe   = combo.pipeline.padEnd(49);
+                const wb     = String(combo.wbStrength).padStart(4);
+                const con    = String(combo.contrastStrength).padStart(4);
+                const thr    = String(combo.threshold).padStart(3);
+                console.log(`  ${rank}  │ ${score} │ ${pipe} │ ${wb} │ ${con} │ ${thr}`);
+            });
         });
     }
 });
