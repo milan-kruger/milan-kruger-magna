@@ -10,8 +10,8 @@
  *   [2]  Transaction / control reference
  *   [3]  Vehicle category flag
  *   [4]  Licence disc number (unique disc ID)
- *   [5]  Registration number (number plate)
- *   [6]  Vehicle register number (internal reference)
+ *   [5]  Licence number (number plate)
+ *   [6]  Vehicle registration number (internal register reference)
  *   [7]  Vehicle type / body type (e.g. Pick-up, Sedan)
  *   [8]  Make (e.g. DAIHATSU, TOYOTA)
  *   [9]  Model / variant
@@ -53,7 +53,8 @@ export function parseCarDiskBarcode(rawValue: string): ParsedDLBarcode {
         }
     };
 
-    add('Registration Number', parts[5]);
+    add('Licence Number', parts[5]);                // Plate number
+    add('Vehicle Registration Number', parts[6]);   // Internal register reference
     add('Vehicle Type', parts[7]);
     add('Make', parts[8]);
     add('Model', parts[9]);
