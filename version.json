@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "5457529235fb0009c957b01e500d649cef1180f2",
-        "shortHash": "5457529",
-        "message": "Fixed performance issues when scanning",
-        "date": "2026-02-27T14:20:38+02:00"
+        "latestCommit": "71421c093b46dafee39edf0f76402933fe674403",
+        "shortHash": "71421c0",
+        "message": "Added back in parsed Data",
+        "date": "2026-02-27T14:37:01+02:00"
     }
 }
