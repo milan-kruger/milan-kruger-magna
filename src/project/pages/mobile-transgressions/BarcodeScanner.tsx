@@ -1,13 +1,11 @@
 import CancelIcon from '@mui/icons-material/Cancel';
 import { BsUpcScan } from 'react-icons/bs';
-import { Box, Stack, useMediaQuery } from '@mui/material';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Box, useMediaQuery } from '@mui/material';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import TmIconButton from '../../../framework/components/button/TmIconButton';
 import TmTypography from '../../../framework/components/typography/TmTypography';
 import { readBarcodes, type ReaderOptions } from 'zxing-wasm/reader';
-import { parseDLBarcode } from './dlBarcodeParser';
-import { isCarDiskBarcode, parseCarDiskBarcode } from './carDiskBarcodeParser';
 import { preprocessGreyscale } from './imagePreprocessing';
 
 type BarcodeResult = {
@@ -18,11 +16,11 @@ type BarcodeResult = {
 
 const READER_OPTIONS: ReaderOptions = {
     formats: ['PDF417'],
-    tryHarder: true,
-    tryRotate: true,
-    tryInvert: true,
+    tryHarder: false,
+    tryRotate: false,
+    tryInvert: false,
     tryDownscale: false,
-    tryDenoise: true,
+    tryDenoise: false,
     isPure: false,
     binarizer: 'LocalAverage',
     textMode: 'Plain',
@@ -35,52 +33,9 @@ const _wasmReady: Promise<void> = (async () => {
         const blank = new ImageData(1, 1);
         await readBarcodes(blank, { formats: ['PDF417'], maxNumberOfSymbols: 1 });
     } catch {
-        // ignore — module is still cached for subsequent real calls
+        // warm cache
     }
 })();
-
-function upscaleImageData(
-  imageData: ImageData,
-  scale: number
-): ImageData {
-  if (scale <= 1) return imageData;
-
-  // Create source canvas
-  const srcCanvas = document.createElement('canvas');
-  const srcCtx = srcCanvas.getContext('2d')!;
-  srcCanvas.width = imageData.width;
-  srcCanvas.height = imageData.height;
-  srcCtx.putImageData(imageData, 0, 0);
-
-  // Create destination canvas
-  const dstCanvas = document.createElement('canvas');
-  const dstCtx = dstCanvas.getContext('2d')!;
-
-  dstCanvas.width = imageData.width * scale;
-  dstCanvas.height = imageData.height * scale;
-
-  // VERY IMPORTANT: disable smoothing
-  dstCtx.imageSmoothingEnabled = false;
-
-  dstCtx.drawImage(
-    srcCanvas,
-    0,
-    0,
-    srcCanvas.width,
-    srcCanvas.height,
-    0,
-    0,
-    dstCanvas.width,
-    dstCanvas.height
-  );
-
-  return dstCtx.getImageData(
-    0,
-    0,
-    dstCanvas.width,
-    dstCanvas.height
-  );
-}
 
 function BarcodeScanner() {
     const { t } = useTranslation();
@@ -89,33 +44,33 @@ function BarcodeScanner() {
     const [scanning, setScanning] = useState(false);
     const [result, setResult] = useState<BarcodeResult | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [failedAttempts, setFailedAttempts] = useState(0);
 
-    const parsedBarcode = useMemo(() => {
-        if (!result) return null;
-        if (isCarDiskBarcode(result.rawValue)) return parseCarDiskBarcode(result.rawValue);
-        return parseDLBarcode(result.rawValue);
-    }, [result]);
-
-    const videoRef = useRef<HTMLVideoElement>(null);
+    const videoRef = useRef<HTMLVideoElement | null>(null);
     const streamRef = useRef<MediaStream | null>(null);
-    const scanTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+    const animationRef = useRef<number | null>(null);
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
-//     const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
+
+    const offscreenCanvasRef = useRef<HTMLCanvasElement | null>(null);
+    const offscreenCtxRef = useRef<CanvasRenderingContext2D | null>(null);
+
     const failedAttemptsRef = useRef<number>(0);
 
-    const [debugInfo, setDebugInfo] = useState({
-      failedAttempts: 0,
-    });
-
     const stopCamera = useCallback(() => {
-        clearTimeout(scanTimerRef.current);
+        if (animationRef.current !== null) {
+            cancelAnimationFrame(animationRef.current);
+            animationRef.current = null;
+        }
+
         if (streamRef.current) {
             streamRef.current.getTracks().forEach(track => track.stop());
             streamRef.current = null;
         }
+
         if (videoRef.current) {
             videoRef.current.srcObject = null;
         }
+
         setScanning(false);
     }, []);
 
@@ -123,29 +78,20 @@ function BarcodeScanner() {
         setError(null);
         setResult(null);
         failedAttemptsRef.current = 0;
+        setFailedAttempts(0);
 
         if (!videoRef.current) return;
 
         await _wasmReady;
 
         try {
-            let stream: MediaStream;
-            try {
-                stream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: { exact: 'environment' },
-                        width: { ideal: 1920 },
-                        height: { ideal: 1080 },
-                    },
-                });
-            } catch {
-                stream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        width: { ideal: 1920 },
-                        height: { ideal: 1080 },
-                    },
-                });
-            }
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: { ideal: 'environment' },
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                },
+            });
 
             streamRef.current = stream;
             videoRef.current.srcObject = stream;
@@ -156,83 +102,110 @@ function BarcodeScanner() {
             if (!canvas) return;
 
             const ctx = canvas.getContext('2d', { willReadFrequently: true });
-            if (!ctx) {
-                console.error('Could not get 2D context');
-                return;
-            }
+            if (!ctx) return;
 
-            const SCAN_INTERVAL_MS = 120;
+            // Create reusable offscreen canvas
+            const offscreen = document.createElement('canvas');
+            const offscreenCtx = offscreen.getContext('2d', {
+                willReadFrequently: true,
+            });
+
+            if (!offscreenCtx) return;
+
+            offscreenCanvasRef.current = offscreen;
+            offscreenCtxRef.current = offscreenCtx;
 
             const scan = async () => {
                 const video = videoRef.current;
-                if (!video || !streamRef.current) return;
+                const stream = streamRef.current;
+                const offscreen = offscreenCanvasRef.current;
+                const offscreenCtx = offscreenCtxRef.current;
 
-                if (video.readyState >= video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
+                if (!video || !stream || !offscreen || !offscreenCtx) return;
 
+                if (video.readyState >= video.HAVE_ENOUGH_DATA) {
                     canvas.width = video.videoWidth;
                     canvas.height = video.videoHeight;
 
+                    // Draw video frame
                     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    // ----- DEBUG OVERLAY -----
+
                     const cropWidth = canvas.width * 0.85;
                     const cropHeight = canvas.height * 0.45;
-
                     const sx = (canvas.width - cropWidth) / 2;
                     const sy = canvas.height * 0.4;
 
-                    // Draw semi-transparent mask outside crop
-                    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-                    ctx.clearRect(sx, sy, cropWidth, cropHeight);
+                    // Copy crop into offscreen canvas
+                    offscreen.width = cropWidth;
+                    offscreen.height = cropHeight;
 
-                    // Draw border
-                    ctx.strokeStyle = 'lime';
-                    ctx.lineWidth = 3;
-                    ctx.strokeRect(sx, sy, cropWidth, cropHeight);
+                    offscreenCtx.drawImage(
+                        canvas,
+                        sx, sy, cropWidth, cropHeight,
+                        0, 0, cropWidth, cropHeight
+                    );
+
+                    let imageData = offscreenCtx.getImageData(
+                        0,
+                        0,
+                        cropWidth,
+                        cropHeight
+                    );
+
+                    imageData = preprocessGreyscale(
+                        imageData,
+                        failedAttemptsRef.current
+                    );
+
                     try {
-                        const cropWidth = canvas.width * 0.85;
-                        const cropHeight = canvas.height * 0.45;
-
-                        // Bias downward (PDF417 is bottom of licence)
-                        const sx = (canvas.width - cropWidth) / 2;
-                        const sy = canvas.height * 0.4;
-
-                        const rawImageData = ctx.getImageData(
-                          sx,
-                          sy,
-                          cropWidth,
-                          cropHeight
+                        const results = await readBarcodes(
+                            imageData,
+                            READER_OPTIONS
                         );
-                        const preprocessedGrey = preprocessGreyscale(rawImageData, failedAttemptsRef.current);
-                        const upscaled = upscaleImageData(preprocessedGrey, 2);
-                        const results = await readBarcodes(upscaled, READER_OPTIONS);
 
                         if (results.length > 0) {
-                            failedAttemptsRef.current = 0;
                             const decoded = results[0];
                             setResult({
                                 rawValue: decoded.text,
                                 format: decoded.format,
                                 bytes: decoded.bytes,
                             });
-                          setDebugInfo({
-                            failedAttempts: failedAttemptsRef.current,
-                          });
                             stopCamera();
                             return;
                         }
 
-                        failedAttemptsRef.current++;
+                        failedAttemptsRef.current += 1;
+                        setFailedAttempts(failedAttemptsRef.current);
                     } catch {
-                        failedAttemptsRef.current++;
-                        // No barcode in this frame, keep scanning
+                        failedAttemptsRef.current += 1;
+                        setFailedAttempts(failedAttemptsRef.current);
                     }
+
+// ---- DRAW OVERLAY (NO clearRect) ----
+                    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+
+// Top
+                    ctx.fillRect(0, 0, canvas.width, sy);
+
+// Bottom
+                    ctx.fillRect(0, sy + cropHeight, canvas.width, canvas.height - (sy + cropHeight));
+
+// Left
+                    ctx.fillRect(0, sy, sx, cropHeight);
+
+// Right
+                    ctx.fillRect(sx + cropWidth, sy, canvas.width - (sx + cropWidth), cropHeight);
+
+// Border
+                    ctx.strokeStyle = 'lime';
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(sx, sy, cropWidth, cropHeight);
                 }
 
-                scanTimerRef.current = globalThis.setTimeout(scan, SCAN_INTERVAL_MS);
+                animationRef.current = requestAnimationFrame(scan);
             };
 
-            scanTimerRef.current = globalThis.setTimeout(scan, 0);
+            animationRef.current = requestAnimationFrame(scan);
         } catch {
             setError(t('barcodeScanner.cameraError'));
             setScanning(false);
@@ -245,136 +218,172 @@ function BarcodeScanner() {
 
     return (
         <Box
-            display='flex'
-            flexDirection='column'
-            alignItems='center'
-            justifyContent='center'
-            height='80vh'
+            display="flex"
+            flexDirection="column"
+            alignItems="center"
+            justifyContent="center"
+            height="80vh"
             gap={3}
         >
             {!scanning && !result && (
                 <>
-                    <TmTypography variant='h5' testid='barcodeScannerTitle'>
+                    <TmTypography
+                        testid="barcodeScannerTitle"
+                        variant="h5"
+                    >
                         {t('barcodeScanner.title')}
                     </TmTypography>
+
                     <TmIconButton
-                        testid='scanBarcodeButton'
-                        size='large'
-                        color='primary'
+                        testid="scanBarcodeButton"
+                        size="large"
+                        color="primary"
                         onClick={startScanning}
                     >
                         <BsUpcScan size={64} />
                     </TmIconButton>
-                    <TmTypography variant='body1' testid='barcodeScannerScanPrompt' color='textSecondary'>
+
+                    <TmTypography
+                        testid="barcodeScannerScanPrompt"
+                        variant="body1"
+                        color="textSecondary"
+                    >
                         {t('barcodeScanner.tapToScan')}
                     </TmTypography>
+
                     {error && (
-                        <TmTypography variant='body2' testid='barcodeScannerError' color='error'>
+                        <TmTypography
+                            testid="barcodeScannerError"
+                            variant="body2"
+                            color="error"
+                        >
                             {error}
                         </TmTypography>
                     )}
                 </>
             )}
 
-            <Box width='100%' maxWidth={500} display={scanning ? 'block' : 'none'}>
-              <video
-                ref={videoRef}
-                style={{ display: 'none' }}
-                playsInline
-                muted
-              />
-                <canvas
-                  ref={canvasRef}
-                  style={{
-                    width: '100%',
-                    height: isPortrait ? '70vh' : 'auto',
-                    objectFit: 'contain',
-                    borderRadius: 8,
-                    display: 'block',
-                  }}
+            <Box
+                width="100%"
+                maxWidth={500}
+                display={scanning ? 'block' : 'none'}
+            >
+                <video
+                    ref={videoRef}
+                    style={{ display: 'none' }}
+                    playsInline
+                    muted
                 />
-                <Box textAlign='center' mt={2} display='flex' flexDirection='column' alignItems='center' gap={1}>
-                    <TmTypography variant='body1' testid='barcodeScannerScanning'>
+
+                <canvas
+                    ref={canvasRef}
+                    style={{
+                        width: '100%',
+                        height: isPortrait ? '70vh' : 'auto',
+                        objectFit: 'contain',
+                        borderRadius: 8,
+                        display: 'block',
+                    }}
+                />
+
+                <Box textAlign="center" mt={2}>
+                    <TmTypography
+                        testid="barcodeScannerScanning"
+                        variant="body1"
+                    >
                         {t('barcodeScanner.scanning')}
                     </TmTypography>
-                                        <TmTypography variant='body1' testid='barcodeScannerScanning'>
-                                          Failures: {debugInfo.failedAttempts}
-                                        </TmTypography>
-                    <TmIconButton testid='stopScanButton' onClick={stopCamera} color='error'>
+
+                    <TmTypography
+                        testid="barcodeScannerFailures"
+                        variant="body2"
+                    >
+                        Failures: {failedAttempts}
+                    </TmTypography>
+
+                    <TmIconButton
+                        testid="stopScanButton"
+                        onClick={stopCamera}
+                        color="error"
+                    >
                         <CancelIcon />
                     </TmIconButton>
                 </Box>
             </Box>
-
-            {result && (
-                <Stack gap={2} alignItems='center' width='100%' maxWidth={500}>
-                    <TmTypography variant='h6' testid='barcodeScannerResultTitle' color='primary'>
+            {result && !scanning && (
+                <Box
+                    width="100%"
+                    maxWidth={500}
+                    display="flex"
+                    flexDirection="column"
+                    alignItems="center"
+                    gap={2}
+                >
+                    <TmTypography
+                        testid="barcodeScannerResultTitle"
+                        variant="h6"
+                        color="primary"
+                    >
                         {t('barcodeScanner.resultTitle')}
                     </TmTypography>
+
                     <Box
                         p={3}
-                        border='1px solid'
-                        borderColor='divider'
+                        border="1px solid"
+                        borderColor="divider"
                         borderRadius={2}
-                        width='100%'
-                        maxHeight='60vh'
-                        overflow='auto'
+                        width="100%"
+                        maxHeight="60vh"
+                        overflow="auto"
                     >
-                    <TmTypography variant="body2" testid='barcodeScannerResultFormat' color="textSecondary">
-                      Failures: {debugInfo.failedAttempts}
-                    </TmTypography>
-                        <Stack gap={10}>
-                            <TmTypography variant='body2' testid='barcodeScannerResultFormat' color='textSecondary'>
-                                {t('barcodeScanner.format')}: {result.format}
-                            </TmTypography>
-                            <Stack>
-                                <TmTypography variant='body1' testid='barcodeScannerResultTitle' color='textSecondary'>
-                                    Raw Value:
-                                </TmTypography>
-                                <TmTypography variant='body1' testid='barcodeScannerResultValue' sx={{ mt: 1, wordBreak: 'break-all' }}>
-                                    {result.rawValue}
-                                </TmTypography>
-                            </Stack>
-                            <Stack>
-                                <TmTypography variant='body1' testid='barcodeScannerResultRawBytesTitle' color='textSecondary'>
-                                    Raw Bytes:
-                                </TmTypography>
-                                <TmTypography variant='body2' testid='barcodeScannerResultRawBytes' sx={{ mt: 1, wordBreak: 'break-all', fontFamily: 'monospace' }}>
-                                    {Array.from(result.bytes).map(b => b.toString(16).padStart(2, '0')).join(' ')}
-                                </TmTypography>
-                            </Stack>
-                            <Stack>
-                                <TmTypography variant='body1' testid='barcodeScannerResultDecodedTitle' color='textSecondary'>
-                                    Decoded Value:
-                                </TmTypography>
-                                <Stack sx={{ mt: 1 }} gap={0.5} data-testid='barcodeScannerResultDecodedValue'>
-                                    {parsedBarcode?.parsed ? (
-                                        parsedBarcode.fields.map(f => (
-                                            <TmTypography key={f.label} testid={`barcodeScannerField-${f.label}`} variant='body2'>
-                                                <strong>{f.label}:</strong> {f.value}
-                                            </TmTypography>
-                                        ))
-                                    ) : (
-                                        <TmTypography testid='barcodeScannerNoStructuredData' variant='body2' color='textSecondary'>
-                                            No structured data detected
-                                        </TmTypography>
-                                    )}
-                                </Stack>
-                            </Stack>
-                        </Stack>
+                        <TmTypography
+                            testid="barcodeScannerResultFormat"
+                            variant="body2"
+                            color="textSecondary"
+                        >
+                            Format: {result.format}
+                        </TmTypography>
+
+                        <TmTypography
+                            testid="barcodeScannerResultRawValue"
+                            variant="body2"
+                            sx={{ mt: 1, wordBreak: 'break-all' }}
+                        >
+                            {result.rawValue}
+                        </TmTypography>
+
+                        <TmTypography
+                            testid="barcodeScannerResultBytes"
+                            variant="body2"
+                            sx={{
+                                mt: 2,
+                                wordBreak: 'break-all',
+                                fontFamily: 'monospace',
+                            }}
+                        >
+                            {Array.from(result.bytes)
+                                .map(b => b.toString(16).padStart(2, '0'))
+                                .join(' ')}
+                        </TmTypography>
                     </Box>
+
                     <TmIconButton
-                        testid='scanAgainButton'
-                        size='large'
-                        color='primary'
+                        testid="scanAgainButton"
+                        size="large"
+                        color="primary"
                         onClick={startScanning}
                     >
                         <BsUpcScan size={48} />
                     </TmIconButton>
-                    <TmTypography variant='body2' testid='barcodeScannerScanAgain' color='textSecondary'>
+
+                    <TmTypography
+                        testid="barcodeScannerScanAgain"
+                        variant="body2"
+                        color="textSecondary"
+                    >
                         {t('barcodeScanner.scanAgain')}
                     </TmTypography>
-                </Stack>
+                </Box>
             )}
         </Box>
     );
