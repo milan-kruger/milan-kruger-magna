@@ -1,13 +1,14 @@
 import CancelIcon from '@mui/icons-material/Cancel';
 import { BsUpcScan } from 'react-icons/bs';
 import { Box, useMediaQuery, CircularProgress } from '@mui/material';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import TmIconButton from '../../../framework/components/button/TmIconButton';
 import TmTypography from '../../../framework/components/typography/TmTypography';
 import { readBarcodes, type ReaderOptions } from 'zxing-wasm/reader';
 import { preprocessGreyscale } from './imagePreprocessing';
-
+import { parseDLBarcode } from './dlBarcodeParser.ts';
+import { parseCarDiskBarcode, isCarDiskBarcode } from './carDiskBarcodeParser.ts';
 type BarcodeResult = {
     rawValue: string;
     format: string;
@@ -64,6 +65,13 @@ function BarcodeScanner() {
     // Optimized canvas for cropping
     const offscreenCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const offscreenCtxRef = useRef<CanvasRenderingContext2D | null>(null);
+
+    // Parse barcode when result changes - MOVED TO COMPONENT LEVEL
+    const parsedBarcode = useMemo(() => {
+        if (!result) return null;
+        if (isCarDiskBarcode(result.rawValue)) return parseCarDiskBarcode(result.rawValue);
+        return parseDLBarcode(result.rawValue);
+    }, [result]);
 
     const stopCamera = useCallback(() => {
         if (animationRef.current !== null) {
@@ -231,7 +239,7 @@ function BarcodeScanner() {
             // Schedule next frame
             animationRef.current = requestAnimationFrame(processFrame);
         }
-    }, [stopCamera, isProcessing, drawOverlay]); // Added drawOverlay to dependencies
+    }, [stopCamera, isProcessing, drawOverlay]);
 
     const startScanning = useCallback(async () => {
         setError(null);
@@ -433,14 +441,16 @@ function BarcodeScanner() {
                             {t('barcodeScanner.format')}: {result.format}
                         </TmTypography>
 
+                        {/* Raw value - MOVED ABOVE PARSED DATA */}
                         <TmTypography
                             testid="barcodeScannerResultRawValue"
                             variant="body2"
                             sx={{ mt: 2, wordBreak: 'break-all' }}
                         >
-                            {result.rawValue}
+                            <strong>Raw Value:</strong> {result.rawValue}
                         </TmTypography>
 
+                        {/* Bytes display */}
                         {result.bytes.length > 0 && (
                             <TmTypography
                                 testid="barcodeScannerResultBytes"
@@ -455,12 +465,36 @@ function BarcodeScanner() {
                                     borderRadius: 1,
                                 }}
                             >
-                                {Array.from(result.bytes)
-                                    .slice(0, 50) // Limit display
+                                <strong>Bytes:</strong> {Array.from(result.bytes)
+                                    .slice(0, 50)
                                     .map(b => b.toString(16).padStart(2, '0'))
                                     .join(' ')}
                                 {result.bytes.length > 50 && '...'}
                             </TmTypography>
+                        )}
+
+                        {/* Parsed barcode data - BELOW THE BYTES */}
+                        {parsedBarcode && (
+                            <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+                                <TmTypography
+                                    testid="barcodeScannerResultParsed"
+                                    variant="subtitle2"
+                                    color="primary"
+                                    sx={{ mb: 1 }}
+                                >
+                                    Parsed Data:
+                                </TmTypography>
+                                {Object.entries(parsedBarcode).map(([key, value]) => (
+                                    <TmTypography
+                                        key={key}
+                                        testid={`barcodeScannerField-${key}`}
+                                        variant="body2"
+                                        sx={{ mt: 0.5 }}
+                                    >
+                                        <strong>{key}:</strong> {String(value)}
+                                    </TmTypography>
+                                ))}
+                            </Box>
                         )}
                     </Box>
 
