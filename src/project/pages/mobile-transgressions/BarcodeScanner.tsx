@@ -24,7 +24,7 @@ const READER_OPTIONS: ReaderOptions = {
     tryDownscale: false,
     tryDenoise: true,
     isPure: false,
-    binarizer: 'GlobalHistogram',
+    binarizer: 'LocalAverage',
     textMode: 'Plain',
     maxNumberOfSymbols: 1,
     returnErrors: false,
@@ -38,6 +38,49 @@ const _wasmReady: Promise<void> = (async () => {
         // ignore — module is still cached for subsequent real calls
     }
 })();
+
+function upscaleImageData(
+  imageData: ImageData,
+  scale: number
+): ImageData {
+  if (scale <= 1) return imageData;
+
+  // Create source canvas
+  const srcCanvas = document.createElement('canvas');
+  const srcCtx = srcCanvas.getContext('2d')!;
+  srcCanvas.width = imageData.width;
+  srcCanvas.height = imageData.height;
+  srcCtx.putImageData(imageData, 0, 0);
+
+  // Create destination canvas
+  const dstCanvas = document.createElement('canvas');
+  const dstCtx = dstCanvas.getContext('2d')!;
+
+  dstCanvas.width = imageData.width * scale;
+  dstCanvas.height = imageData.height * scale;
+
+  // VERY IMPORTANT: disable smoothing
+  dstCtx.imageSmoothingEnabled = false;
+
+  dstCtx.drawImage(
+    srcCanvas,
+    0,
+    0,
+    srcCanvas.width,
+    srcCanvas.height,
+    0,
+    0,
+    dstCanvas.width,
+    dstCanvas.height
+  );
+
+  return dstCtx.getImageData(
+    0,
+    0,
+    dstCanvas.width,
+    dstCanvas.height
+  );
+}
 
 function BarcodeScanner() {
     const { t } = useTranslation();
@@ -138,7 +181,8 @@ function BarcodeScanner() {
                           cropHeight
                         );
                         const preprocessedGrey = preprocessGreyscale(rawImageData, failedAttemptsRef.current);
-                        const results = await readBarcodes(preprocessedGrey, READER_OPTIONS);
+                        const upscaled = upscaleImageData(preprocessedGrey, 2);
+                        const results = await readBarcodes(upscaled, READER_OPTIONS);
 
                         if (results.length > 0) {
                             failedAttemptsRef.current = 0;
@@ -212,7 +256,7 @@ function BarcodeScanner() {
                     style={{
                         width: '100%',
                         height: isPortrait ? '70vh' : 'auto',
-                        objectFit: isPortrait ? 'cover' : 'unset',
+                        objectFit: 'contain',
                         borderRadius: 8,
                         display: 'block',
                     }}
