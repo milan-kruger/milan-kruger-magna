@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "211a90fcf9d86efa9bdfdec3695be04daf9a1460",
-        "shortHash": "211a90f",
-        "message": "Fixed format",
-        "date": "2026-02-27T14:45:39+02:00"
+        "latestCommit": "d50c5efae7b800c311dce105b1b27c5b8b9e4297",
+        "shortHash": "d50c5ef",
+        "message": "Added in faster concurrent scans",
+        "date": "2026-02-27T14:51:54+02:00"
     }
 }
