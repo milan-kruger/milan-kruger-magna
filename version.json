@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "24d86f7663f882e8c64de1f53eea717d308ec270",
-        "shortHash": "24d86f7",
-        "message": "Added in car disk",
-        "date": "2026-02-27T11:24:08+02:00"
+        "latestCommit": "33544a15aedac775d705e36e9df612b1125e2e4f",
+        "shortHash": "33544a1",
+        "message": "Fixed camera",
+        "date": "2026-02-27T12:31:23+02:00"
     }
 }
