@@ -7,7 +7,7 @@ import TmIconButton from '../../../framework/components/button/TmIconButton';
 import TmTypography from '../../../framework/components/typography/TmTypography';
 import { readBarcodes, type ReaderOptions } from 'zxing-wasm/reader';
 import { parseDLBarcode } from './dlBarcodeParser';
-import { preprocessGreyscale } from './imagePreprocessing';
+import { preprocessGreyscale , applyBinaryThreshold } from './imagePreprocessing';
 import { deskew } from './deskew';
 
 type BarcodeResult = {
@@ -140,8 +140,9 @@ function BarcodeScanner() {
 
                     try {
                         const rawImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                        const preprocessed = preprocessGreyscale(rawImageData, failedAttemptsRef.current);
-                        const { imageData } = deskew(preprocessed);
+                        const preprocessedGrey = preprocessGreyscale(rawImageData, failedAttemptsRef.current);
+                        const preprocessedThreshold = applyBinaryThreshold(preprocessedGrey, 160 - failedAttemptsRef.current * 10);
+                        const { imageData } = deskew(preprocessedThreshold);
                         const results = await readBarcodes(imageData, READER_OPTIONS);
 
                         if (results.length > 0) {
