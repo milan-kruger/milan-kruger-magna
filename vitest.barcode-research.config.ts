@@ -23,8 +23,8 @@ export default defineConfig({
         setupFiles: ['./vitest-setup-file-node.ts'],
         fileParallelism: false,
         isolate: false,
-        maxConcurrency: 8,   // allow many concurrent tests (default is 5)
-        testTimeout: 600_000, // 10 min for the full matrix
+        maxConcurrency: 16,   // one test per image — parallelise across images
+        testTimeout: 300_000, // 5 min per image should be plenty
         reporters: ['default'],
         // NO browser mode — this is the critical fix
         // browser: { enabled: false } is the default, so we just omit it

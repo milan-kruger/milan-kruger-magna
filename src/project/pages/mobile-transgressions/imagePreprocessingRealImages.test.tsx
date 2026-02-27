@@ -5,15 +5,18 @@
  * `test-images/` folder next to this file. This test will:
  *
  *  1. Load every image from that folder
- *  2. Run every preprocessing pipeline combination through zxing-wasm decoding
+ *  2. Run curated preprocessing pipelines with relevant parameter combos
  *  3. Write full results to `barcode-results.json` (no large console output)
  *  4. Print only a compact summary to avoid WebSocket payload limits
  *
- * For full brute-force research with unlimited output, use the standalone runner:
- *   npm run barcode:research
+ * By default uses a curated set of ~8 pipelines with coarse parameter grids
+ * and early-exits after finding successful decodes per image (~50–100× faster).
+ *
+ * For full brute-force research, set FULL_SWEEP=true:
+ *   FULL_SWEEP=true npm run barcode:research
  *
  * Run with:
- *   vitest --run --maxWorkers=100%
+ *   npm run barcode:research
  */
 
 import { describe, test, expect, afterAll } from 'vitest';
@@ -28,6 +31,13 @@ import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { readdirSync } from 'fs';
 import sharp from 'sharp';
+
+// ─── Config: FULL_SWEEP mode ────────────────────────────────────────────────
+
+const FULL_SWEEP = process.env.FULL_SWEEP === 'true';
+
+/** Max successful decodes per image before skipping remaining combos. 0 = no limit. */
+const EARLY_EXIT_COUNT = FULL_SWEEP ? 0 : 5;
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -56,60 +66,64 @@ type DecodeResult = {
 
 // ─── Pipeline step definitions ──────────────────────────────────────────────
 
-const STEP_FACTORIES: StepFactory[] = [
-    {
-        name: 'whiteBalance',
-        build: (p) => (img) => whiteBalance(img, undefined, p.wbStrength),
-    },
-    {
-        name: 'greyscale',
-        build: () => (img) => toGreyscale(img),
-    },
-    {
-        name: 'contrast',
-        build: (p) => (img) => applySCurveContrast(img, p.contrastStrength),
-    },
-    {
-        name: 'threshold',
-        build: (p) => (img) => applyBinaryThreshold(img, p.threshold),
-    },
-];
+const WB_STEP: StepFactory = {
+    name: 'whiteBalance',
+    build: (p) => (img) => whiteBalance(img, undefined, p.wbStrength),
+};
 
-/** Generate all permutations of an array. */
-function permutations<T>(arr: T[]): T[][] {
-    if (arr.length <= 1) return [arr];
-    const result: T[][] = [];
-    for (let i = 0; i < arr.length; i++) {
-        const rest = [...arr.slice(0, i), ...arr.slice(i + 1)];
-        for (const perm of permutations(rest)) {
-            result.push([arr[i], ...perm]);
-        }
-    }
-    return result;
-}
+const GREY_STEP: StepFactory = {
+    name: 'greyscale',
+    build: () => (img) => toGreyscale(img),
+};
+
+const CONTRAST_STEP: StepFactory = {
+    name: 'contrast',
+    build: (p) => (img) => applySCurveContrast(img, p.contrastStrength),
+};
+
+const THRESHOLD_STEP: StepFactory = {
+    name: 'threshold',
+    build: (p) => (img) => applyBinaryThreshold(img, p.threshold),
+};
+
+// ─── Curated pipelines (replaces all-permutations brute force) ──────────────
+
+type Pipeline = { name: string; steps: StepFactory[] };
+
+const CURATED_PIPELINES: Pipeline[] = [
+    { name: 'greyscale',                                   steps: [GREY_STEP] },
+    { name: 'whiteBalance → greyscale',                    steps: [WB_STEP, GREY_STEP] },
+    { name: 'greyscale → contrast',                        steps: [GREY_STEP, CONTRAST_STEP] },
+    { name: 'whiteBalance → greyscale → contrast',         steps: [WB_STEP, GREY_STEP, CONTRAST_STEP] },
+    { name: 'greyscale → threshold',                       steps: [GREY_STEP, THRESHOLD_STEP] },
+    { name: 'greyscale → contrast → threshold',            steps: [GREY_STEP, CONTRAST_STEP, THRESHOLD_STEP] },
+    { name: 'whiteBalance → greyscale → contrast → threshold', steps: [WB_STEP, GREY_STEP, CONTRAST_STEP, THRESHOLD_STEP] },
+    { name: 'contrast → greyscale → threshold',            steps: [CONTRAST_STEP, GREY_STEP, THRESHOLD_STEP] },
+];
 
 // ─── Parameter ranges ───────────────────────────────────────────────────────
 
-const WB_STRENGTHS       = [0.8, 1.0, 1.2, 1.5, 2.0];
-const CONTRAST_STRENGTHS = [0.25, 0.5, 0.75, 1.0];
-const THRESHOLDS         = [96, 112, 128, 144, 160, 192];
+const WB_STRENGTHS       = FULL_SWEEP ? [0.8, 1.0, 1.2, 1.5, 2.0] : [1.0, 1.5, 2.0];
+const CONTRAST_STRENGTHS = FULL_SWEEP ? [0.25, 0.5, 0.75, 1.0]     : [0.25, 0.5, 1.0];
+const THRESHOLDS         = FULL_SWEEP ? [96, 112, 128, 144, 160, 192] : [96, 128, 160];
 
-// ─── Pipeline permutations ──────────────────────────────────────────────────
+// ─── Build relevant parameter combos per pipeline ───────────────────────────
 
-const twoStepPerms   = permutations([STEP_FACTORIES[0], STEP_FACTORIES[1]]);
-const threeStepPerms = permutations([STEP_FACTORIES[0], STEP_FACTORIES[1], STEP_FACTORIES[2]]);
-const fourStepPerms  = permutations(STEP_FACTORIES);
-const allPipelinePerms = [...twoStepPerms, ...threeStepPerms, ...fourStepPerms];
+function buildParamCombos(pipeline: Pipeline): PipelineParams[] {
+    const stepNames = new Set(pipeline.steps.map(s => s.name));
+    const wbValues       = stepNames.has('whiteBalance') ? WB_STRENGTHS       : [1.0];
+    const contrastValues = stepNames.has('contrast')     ? CONTRAST_STRENGTHS : [0.5];
+    const thresholdValues = stepNames.has('threshold')   ? THRESHOLDS         : [128];
 
-// ─── Parameter combos ───────────────────────────────────────────────────────
-
-const paramCombos: PipelineParams[] = [];
-for (const wbStrength of WB_STRENGTHS) {
-    for (const contrastStrength of CONTRAST_STRENGTHS) {
-        for (const threshold of THRESHOLDS) {
-            paramCombos.push({ wbStrength, contrastStrength, threshold });
+    const combos: PipelineParams[] = [];
+    for (const wbStrength of wbValues) {
+        for (const contrastStrength of contrastValues) {
+            for (const threshold of thresholdValues) {
+                combos.push({ wbStrength, contrastStrength, threshold });
+            }
         }
     }
+    return combos;
 }
 
 // ─── zxing-wasm reader options (same as production) ─────────────────────────
@@ -167,68 +181,15 @@ const imageEntries = imageFiles.map(({ name, absolutePath }) => ({
     url: absolutePath,
 }));
 
-// ─── Build the flat list of all test combos ─────────────────────────────────
+// ─── Count total combos for logging ─────────────────────────────────────────
 
-type TestCombo = {
-    /** Display label for test.each */
-    label: string;
-    imageName: string;
-    imageUrl: string;
-    pipelineSteps: StepFactory[];
-    pipelineName: string;
-    params: PipelineParams;
-};
-
-const allTestCombos: TestCombo[] = [];
-
-for (const entry of imageEntries) {
-    // Raw (no preprocessing) test per image
-    allTestCombos.push({
-        label: `${entry.name} | (raw — no preprocessing)`,
-        imageName: entry.name,
-        imageUrl: entry.url,
-        pipelineSteps: [],
-        pipelineName: '(raw — no preprocessing)',
-        params: { wbStrength: 0, contrastStrength: 0, threshold: 0 },
-    });
-
-    // All pipeline × params combos
-    for (const pipelineSteps of allPipelinePerms) {
-        for (const params of paramCombos) {
-            const pipelineName = pipelineSteps.map(s => s.name).join(' → ');
-            allTestCombos.push({
-                label: `${entry.name} | ${pipelineName} | wb=${params.wbStrength} con=${params.contrastStrength} thr=${params.threshold}`,
-                imageName: entry.name,
-                imageUrl: entry.url,
-                pipelineSteps,
-                pipelineName,
-                params,
-            });
-        }
-    }
-}
+const totalCombosPerImage = 1 /* raw */ + CURATED_PIPELINES.reduce(
+    (sum, p) => sum + buildParamCombos(p).length, 0,
+);
 
 // ─── Shared results array (module-scoped, collected in afterAll) ────────────
 
 const allResults: DecodeResult[] = [];
-
-// ─── Counters for minimal progress reporting ────────────────────────────────
-
-// (counts tracked via allResults in afterAll)
-
-
-// ─── Image cache to avoid re-fetching per combo ────────────────────────────
-
-const imageCache = new Map<string, Promise<ImageData>>();
-
-function getImageData(url: string): Promise<ImageData> {
-    let cached = imageCache.get(url);
-    if (!cached) {
-        cached = loadImageData(url);
-        imageCache.set(url, cached);
-    }
-    return cached;
-}
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
@@ -240,56 +201,91 @@ describe('Real-image barcode preprocessing pipeline', () => {
             expect(true).toBe(true);
         });
     } else {
-        console.log(`📸 ${imageEntries.length} images, ${allPipelinePerms.length} pipelines × ${paramCombos.length} params = ${allTestCombos.length} combos`);
+        const totalCombos = imageEntries.length * totalCombosPerImage;
+        console.log(
+            `📸 ${imageEntries.length} images × ${totalCombosPerImage} combos/image = ${totalCombos} combos` +
+            (FULL_SWEEP ? ' (FULL_SWEEP)' : ` (early-exit after ${EARLY_EXIT_COUNT} successes/image)`),
+        );
 
-        // Each combo is its own concurrent test — Vitest parallelises these
+        // One test per image — inner loop over pipelines × params with early exit
         test.concurrent.each(
-            allTestCombos.map(combo => [combo.label, combo] as const),
+            imageEntries.map(entry => [entry.name, entry] as const),
         )(
             '%s',
-            async (_label, combo) => {
-                const imageData = await getImageData(combo.imageUrl);
+            async (_label, entry) => {
+                const imageData = await loadImageData(entry.url);
                 expect(imageData.width).toBeGreaterThan(0);
                 expect(imageData.height).toBeGreaterThan(0);
 
-                // Apply preprocessing pipeline (if any)
-                let processed = imageData;
-                if (combo.pipelineSteps.length > 0) {
-                    const steps = combo.pipelineSteps.map(sf => sf.build(combo.params));
-                    for (const step of steps) {
-                        processed = step(processed);
-                    }
-                }
+                const imageResults: DecodeResult[] = [];
+                let successCount = 0;
 
-                // Attempt barcode decoding
-                let decoded = false;
-                let decodedText: string | null = null;
-                try {
-                    const barcodeResults = await readBarcodes(processed, READER_OPTIONS);
-                    if (barcodeResults.length > 0) {
-                        decoded = true;
-                        decodedText = barcodeResults[0].text;
+                // Helper: attempt decode and record result; returns true if early-exit triggered
+                const tryDecode = async (
+                    processed: ImageData,
+                    pipelineName: string,
+                    params: PipelineParams,
+                ): Promise<boolean> => {
+                    let decoded = false;
+                    let decodedText: string | null = null;
+                    try {
+                        const barcodeResults = await readBarcodes(processed, READER_OPTIONS);
+                        if (barcodeResults.length > 0) {
+                            decoded = true;
+                            decodedText = barcodeResults[0].text;
+                            successCount++;
+                        }
+                    } catch {
+                        // decode failed — that's fine
                     }
-                } catch {
-                    // decode failed — that's fine
-                }
 
-                const result: DecodeResult = {
-                    imageName: combo.imageName,
-                    pipeline: combo.pipelineName,
-                    wbStrength: combo.params.wbStrength,
-                    contrastStrength: combo.params.contrastStrength,
-                    threshold: combo.params.threshold,
-                    decoded,
-                    decodedText,
+                    const result: DecodeResult = {
+                        imageName: entry.name,
+                        pipeline: pipelineName,
+                        wbStrength: params.wbStrength,
+                        contrastStrength: params.contrastStrength,
+                        threshold: params.threshold,
+                        decoded,
+                        decodedText,
+                    };
+                    imageResults.push(result);
+
+                    return EARLY_EXIT_COUNT > 0 && successCount >= EARLY_EXIT_COUNT;
                 };
 
-                allResults.push(result);
+                // 1. Try raw (no preprocessing)
+                const rawParams: PipelineParams = { wbStrength: 0, contrastStrength: 0, threshold: 0 };
+                let earlyExit = await tryDecode(imageData, '(raw — no preprocessing)', rawParams);
 
-                // Soft assertion — we don't fail the test if decoding fails
-                expect(imageData.width).toBeGreaterThan(0);
+                // 2. Try each curated pipeline × relevant params
+                if (!earlyExit) {
+                    outer:
+                    for (const pipeline of CURATED_PIPELINES) {
+                        const paramCombos = buildParamCombos(pipeline);
+                        for (const params of paramCombos) {
+                            // Apply preprocessing pipeline
+                            let processed = imageData;
+                            const steps = pipeline.steps.map(sf => sf.build(params));
+                            for (const step of steps) {
+                                processed = step(processed);
+                            }
+
+                            earlyExit = await tryDecode(processed, pipeline.name, params);
+                            if (earlyExit) break outer;
+                        }
+                    }
+                }
+
+                // Collect results for the summary
+                allResults.push(...imageResults);
+
+                // Log compact per-image status
+                const imgDecoded = imageResults.filter(r => r.decoded).length;
+                const status = imgDecoded > 0 ? '✅' : '❌';
+                const skipped = earlyExit ? ` (early-exit, ${imageResults.length}/${totalCombosPerImage} tested)` : '';
+                console.log(`  ${status} ${entry.name}: ${imgDecoded}/${imageResults.length} decoded${skipped}`);
             },
-            120_000, // 2 min per individual combo should be plenty
+            300_000, // 5 min per image
         );
 
         // ─── Summary (runs after all concurrent tests complete) ─────────
