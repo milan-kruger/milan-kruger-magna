@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "84e0d898a55386c5c949498578e09c83f9f14d85",
-        "shortHash": "84e0d89",
-        "message": "Testing stuff",
-        "date": "2026-02-28T22:52:44+02:00"
+        "latestCommit": "7cd48042c679231570b3fcddb0aa695145553b78",
+        "shortHash": "7cd4804",
+        "message": "Added in perspective correction",
+        "date": "2026-02-28T23:23:48+02:00"
     }
 }
