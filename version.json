@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "40fb345d00c87b1b0642c434324d8a872cf4ebcf",
-        "shortHash": "40fb345",
-        "message": "Fixed portrait mode x and y and width",
-        "date": "2026-02-28T16:53:26+02:00"
+        "latestCommit": "7d148c9429010dd72a1d1e9de052f16abfd97a9e",
+        "shortHash": "7d148c9",
+        "message": "Fixed ROI not being centred and added preprocessing",
+        "date": "2026-02-28T17:03:16+02:00"
     }
 }
