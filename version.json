@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "68997ab9d8853fd225ae2c96db9137ac987e5614",
-        "shortHash": "68997ab",
-        "message": "Made it only do adaptiveLocalContrast",
-        "date": "2026-02-28T17:25:21+02:00"
+        "latestCommit": "51847414a6338f03e73491fe6ee055ea0fa557df",
+        "shortHash": "5184741",
+        "message": "Made ROI horizontal and smaller",
+        "date": "2026-02-28T17:32:54+02:00"
     }
 }
