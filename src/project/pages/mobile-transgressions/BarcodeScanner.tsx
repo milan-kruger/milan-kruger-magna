@@ -59,7 +59,7 @@ function getROI(width: number, height: number) {
         return {
             x: 0.5,
             y: 0.05,
-            width: 0.3,
+            width: 0.4,
             height: 0.9
         };
     }
