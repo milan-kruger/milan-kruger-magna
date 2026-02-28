@@ -58,7 +58,7 @@ function getROI(width: number, height: number) {
     if (isPortrait) {
         return {
             x: 0.3,
-            y: 0.4,
+            y: 0.3,
             width: 0.4,
             height: 0.7
         };
@@ -66,9 +66,9 @@ function getROI(width: number, height: number) {
 
     return {
         x: 0.15,
-        y: 0.40,
-        width: 0.70,
-        height: 0.40
+        y: 0.3,
+        width: 0.7,
+        height: 0.4
     };
 }
 
