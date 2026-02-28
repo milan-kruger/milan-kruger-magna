@@ -327,7 +327,7 @@ function BarcodeScanner() {
             )}
 
             <Box width='100%' maxWidth={500} display={state.phase === 'scanning' ? 'block' : 'none'}>
-                <Box position="relative" display="inline-block">
+                <Box position="relative" width="100%">
                     <video
                         ref={videoRef}
                         style={{
@@ -351,7 +351,8 @@ function BarcodeScanner() {
                                 top: `${roi?.y * 100}%`,
                                 width: `${roi?.width * 100}%`,
                                 height: `${roi?.height * 100}%`,
-                                boxSizing: 'border-box'
+                                boxSizing: 'border-box',
+                                transform: 'translate(0, 0)',
                             }}
                         />
                     )}
