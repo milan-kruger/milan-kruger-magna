@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "bb5962c348607e93c3bb370b91559a101ea74bb7",
-        "shortHash": "bb5962c",
-        "message": "Testing hard threshold",
-        "date": "2026-02-28T21:08:43+02:00"
+        "latestCommit": "2c220ed262197fd74b8ed64bebc07b908a1ecd31",
+        "shortHash": "2c220ed",
+        "message": "Testing multiPass",
+        "date": "2026-02-28T21:18:35+02:00"
     }
 }
