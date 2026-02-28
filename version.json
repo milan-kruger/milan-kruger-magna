@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "1895e43bec4460f5e41d9f94c2344838fc632e77",
-        "shortHash": "1895e43",
-        "message": "Added in multi pipeline",
-        "date": "2026-02-28T22:21:58+02:00"
+        "latestCommit": "759eb1146c4d44f1f9b783fff2f9b9d0154e0c2b",
+        "shortHash": "759eb11",
+        "message": "Fixed ROI",
+        "date": "2026-02-28T22:33:19+02:00"
     }
 }
