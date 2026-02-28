@@ -98,51 +98,51 @@ function getROI(width: number, height: number) {
     };
 }
 
-// function toGrayscale(imageData: ImageData): ImageData {
-//     const data = imageData.data;
-//
-//     for (let i = 0; i < data.length; i += 4) {
-//         // Standard luminance formula (Rec. 709)
-//         const gray = (77 * data[i] + 150 * data[i + 1] + 29 * data[i + 2]) >> 8;
-//
-//         data[i] = gray;     // Red
-//         data[i + 1] = gray; // Green
-//         data[i + 2] = gray; // Blue
-//         // data[i + 3] is alpha, leave unchanged
-//     }
-//
-//     return imageData;
-// }
-//
-// function contrastStretch(imageData: ImageData): ImageData {
-//     const data = imageData.data;
-//
-//     let min = 255;
-//     let max = 0;
-//
-//     // First pass: compute luminance min/max
-//     for (let i = 0; i < data.length; i += 4) {
-//         const lum = (77 * data[i] + 150 * data[i + 1] + 29 * data[i + 2]) >> 8;
-//         if (lum < min) min = lum;
-//         if (lum > max) max = lum;
-//     }
-//
-//     if (max === min) return imageData;
-//
-//     const scale = 255 / (max - min);
-//
-//     // Second pass: apply stretch
-//     for (let i = 0; i < data.length; i += 4) {
-//         const lum = (77 * data[i] + 150 * data[i + 1] + 29 * data[i + 2]) >> 8;
-//         const stretched = Math.max(0, Math.min(255, (lum - min) * scale));
-//
-//         data[i] = stretched;
-//         data[i + 1] = stretched;
-//         data[i + 2] = stretched;
-//     }
-//
-//     return imageData;
-// }
+function toGrayscale(imageData: ImageData): ImageData {
+    const data = imageData.data;
+
+    for (let i = 0; i < data.length; i += 4) {
+        // Standard luminance formula (Rec. 709)
+        const gray = (77 * data[i] + 150 * data[i + 1] + 29 * data[i + 2]) >> 8;
+
+        data[i] = gray;     // Red
+        data[i + 1] = gray; // Green
+        data[i + 2] = gray; // Blue
+        // data[i + 3] is alpha, leave unchanged
+    }
+
+    return imageData;
+}
+
+function contrastStretch(imageData: ImageData): ImageData {
+    const data = imageData.data;
+
+    let min = 255;
+    let max = 0;
+
+    // First pass: compute luminance min/max
+    for (let i = 0; i < data.length; i += 4) {
+        const lum = (77 * data[i] + 150 * data[i + 1] + 29 * data[i + 2]) >> 8;
+        if (lum < min) min = lum;
+        if (lum > max) max = lum;
+    }
+
+    if (max === min) return imageData;
+
+    const scale = 255 / (max - min);
+
+    // Second pass: apply stretch
+    for (let i = 0; i < data.length; i += 4) {
+        const lum = (77 * data[i] + 150 * data[i + 1] + 29 * data[i + 2]) >> 8;
+        const stretched = Math.max(0, Math.min(255, (lum - min) * scale));
+
+        data[i] = stretched;
+        data[i + 1] = stretched;
+        data[i + 2] = stretched;
+    }
+
+    return imageData;
+}
 
 function adaptiveLocalContrast(imageData: ImageData, tileSize = 64): ImageData {
     const { width, height, data } = imageData;
@@ -291,9 +291,9 @@ function BarcodeScanner() {
                 try {
                     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-                    // toGrayscale(imageData);
-                    //
-                    //contrastStretch(imageData);
+                    toGrayscale(imageData);
+
+                    contrastStretch(imageData);
 
                     // OR
                     adaptiveLocalContrast(imageData, 64);
