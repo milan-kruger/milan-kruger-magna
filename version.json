@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "d5e3123c040801fd243daca929d71f53019adb6d",
-        "shortHash": "d5e3123",
-        "message": "Added in grayscale",
-        "date": "2026-02-28T17:15:51+02:00"
+        "latestCommit": "68997ab9d8853fd225ae2c96db9137ac987e5614",
+        "shortHash": "68997ab",
+        "message": "Made it only do adaptiveLocalContrast",
+        "date": "2026-02-28T17:25:21+02:00"
     }
 }
