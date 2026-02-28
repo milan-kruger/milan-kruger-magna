@@ -8,6 +8,8 @@ import TmTypography from '../../../framework/components/typography/TmTypography'
 import { readBarcodes, type ReaderOptions } from 'zxing-wasm/reader';
 import { parseDLBarcode } from './dlBarcodeParser';
 import { parseCarDiskBarcode, isCarDiskBarcode } from './carDiskBarcodeParser';
+import cv from "@techstark/opencv-js";
+
 type BarcodeResult = {
     rawValue: string;
     format: string;
@@ -25,7 +27,7 @@ const wasmReaderOptions: ReaderOptions = {
     formats: ['PDF417'],
     tryHarder: true,
     tryRotate: true,
-    tryDownscale: true,
+    tryDownscale: false,
     tryDenoise: false,      // experimental; expensive on mobile CPUs
     maxNumberOfSymbols: 1,
     textMode: 'Plain',
@@ -370,6 +372,106 @@ async function tryDecode(
 
     return null;
 }
+type OpenCVModule = typeof cv & {
+    onRuntimeInitialized?: () => void;
+};
+
+function perspectiveCorrect(
+    canvas: HTMLCanvasElement,
+    openCvReady: boolean
+): ImageData | null {
+
+    if (!openCvReady) return null;
+
+    const src = cv.imread(canvas);
+    const gray = new cv.Mat();
+    const blurred = new cv.Mat();
+    const edges = new cv.Mat();
+    const contours = new cv.MatVector();
+    const hierarchy = new cv.Mat();
+
+    try {
+        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+        cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
+        cv.Canny(blurred, edges, 75, 200);
+
+        cv.findContours(
+            edges,
+            contours,
+            hierarchy,
+            cv.RETR_EXTERNAL,
+            cv.CHAIN_APPROX_SIMPLE
+        );
+
+        let biggest = null;
+        let maxArea = 0;
+
+        for (let i = 0; i < contours.size(); i++) {
+            const cnt = contours.get(i);
+            const area = cv.contourArea(cnt);
+
+            if (area > maxArea) {
+                const approx = new cv.Mat();
+                cv.approxPolyDP(cnt, approx, 0.02 * cv.arcLength(cnt, true), true);
+
+                if (approx.rows === 4) {
+                    biggest = approx;
+                    maxArea = area;
+                } else {
+                    approx.delete();
+                }
+            }
+        }
+
+        if (!biggest) {
+            return null;
+        }
+
+        const width = 1000;
+        const height = 400;
+
+        const srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, biggest.data32F);
+        const dstTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
+            0, 0,
+            width, 0,
+            width, height,
+            0, height
+        ]);
+
+        const M = cv.getPerspectiveTransform(srcTri, dstTri);
+        const warped = new cv.Mat();
+        cv.warpPerspective(src, warped, M, new cv.Size(width, height));
+
+        const result = new ImageData(
+            new Uint8ClampedArray(warped.data),
+            warped.cols,
+            warped.rows
+        );
+
+        // Cleanup
+        src.delete();
+        gray.delete();
+        blurred.delete();
+        edges.delete();
+        contours.delete();
+        hierarchy.delete();
+        biggest.delete();
+        srcTri.delete();
+        dstTri.delete();
+        M.delete();
+        warped.delete();
+
+        return result;
+    } catch {
+        src.delete();
+        gray.delete();
+        blurred.delete();
+        edges.delete();
+        contours.delete();
+        hierarchy.delete();
+        return null;
+    }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -391,6 +493,21 @@ function BarcodeScanner() {
     const videoRef = useRef<HTMLVideoElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
     const scanTimerRef = useRef<number>(0);
+
+    const [openCvReady, setOpenCvReady] = useState(false);
+
+    useEffect(() => {
+        const cvModule = cv as OpenCVModule;
+
+        if (cvModule.onRuntimeInitialized) {
+            cvModule.onRuntimeInitialized = () => {
+                console.log("OpenCV ready");
+                setOpenCvReady(true);
+            };
+        } else {
+            setOpenCvReady(true);
+        }
+    }, []);
 
     /** Stop camera hardware only — no React state changes. */
     const stopStream = useCallback(() => {
@@ -476,7 +593,20 @@ function BarcodeScanner() {
                 try {
                     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
+                    // Try normal decode first
                     decoded = await tryDecode(imageData);
+
+                    if (!openCvReady) {
+                        scanTimerRef.current = globalThis.setTimeout(scan, 250);
+                        return;
+                    }
+                    // If normal fails and OpenCV is ready → attempt perspective correction
+                    if (!decoded && openCvReady) {
+                        const corrected = perspectiveCorrect(canvas, openCvReady);
+                        if (corrected) {
+                            decoded = await tryDecode(corrected);
+                        }
+                    }
                 } catch {
                     // no barcode detected this frame
                 }
@@ -498,7 +628,7 @@ function BarcodeScanner() {
         } catch {
             setState({ phase: 'idle', error: t('barcodeScanner.cameraError') });
         }
-    }, [t, stopStream]);
+    }, [t, stopStream, openCvReady]);
 
     useEffect(() => {
         return () => stopStream();
