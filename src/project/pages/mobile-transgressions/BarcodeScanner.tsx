@@ -40,8 +40,26 @@ const wasmReaderOptionsFallback: ReaderOptions = {
     binarizer: 'GlobalHistogram',
 };
 
+function imageDataToBase64(imageData: ImageData): string {
+    const canvas = document.createElement('canvas');
+    canvas.width = imageData.width;
+    canvas.height = imageData.height;
+
+    const ctx = canvas.getContext('2d')!;
+    ctx.putImageData(imageData, 0, 0);
+
+    return canvas.toDataURL('image/png');
+    // returns: "data:image/png;base64,iVBORw0KGgoAAAANS..."
+}
+
 /** Try decoding with primary binarizer, then fallback binarizer. */
 async function tryDecode(imageData: ImageData): Promise<{ text: string; format: string } | null> {
+
+    const base64 = imageDataToBase64(imageData);
+
+    console.log('Base64 Image:', base64);
+    console.log('Base64 only:', base64.split(',')[1]); // optional
+
     let results = await readBarcodes(imageData, wasmReaderOptions);
     if (results.length === 0 || !results[0].isValid) {
         results = await readBarcodes(imageData, wasmReaderOptionsFallback);
@@ -80,96 +98,96 @@ function getROI(width: number, height: number) {
     };
 }
 
-function toGrayscale(imageData: ImageData): ImageData {
-    const data = imageData.data;
-
-    for (let i = 0; i < data.length; i += 4) {
-        // Standard luminance formula (Rec. 709)
-        const gray = (77 * data[i] + 150 * data[i + 1] + 29 * data[i + 2]) >> 8;
-
-        data[i] = gray;     // Red
-        data[i + 1] = gray; // Green
-        data[i + 2] = gray; // Blue
-        // data[i + 3] is alpha, leave unchanged
-    }
-
-    return imageData;
-}
-
-function contrastStretch(imageData: ImageData): ImageData {
-    const data = imageData.data;
-
-    let min = 255;
-    let max = 0;
-
-    // First pass: compute luminance min/max
-    for (let i = 0; i < data.length; i += 4) {
-        const lum = (77 * data[i] + 150 * data[i + 1] + 29 * data[i + 2]) >> 8;
-        if (lum < min) min = lum;
-        if (lum > max) max = lum;
-    }
-
-    if (max === min) return imageData;
-
-    const scale = 255 / (max - min);
-
-    // Second pass: apply stretch
-    for (let i = 0; i < data.length; i += 4) {
-        const lum = (77 * data[i] + 150 * data[i + 1] + 29 * data[i + 2]) >> 8;
-        const stretched = Math.max(0, Math.min(255, (lum - min) * scale));
-
-        data[i] = stretched;
-        data[i + 1] = stretched;
-        data[i + 2] = stretched;
-    }
-
-    return imageData;
-}
-
-// function adaptiveLocalContrast(imageData: ImageData, tileSize = 64): ImageData {
-//     const { width, height, data } = imageData;
+// function toGrayscale(imageData: ImageData): ImageData {
+//     const data = imageData.data;
 //
-//     for (let ty = 0; ty < height; ty += tileSize) {
-//         for (let tx = 0; tx < width; tx += tileSize) {
+//     for (let i = 0; i < data.length; i += 4) {
+//         // Standard luminance formula (Rec. 709)
+//         const gray = (77 * data[i] + 150 * data[i + 1] + 29 * data[i + 2]) >> 8;
 //
-//             let min = 255;
-//             let max = 0;
-//
-//             const yEnd = Math.min(ty + tileSize, height);
-//             const xEnd = Math.min(tx + tileSize, width);
-//
-//             // First pass: find luminance min/max in tile
-//             for (let y = ty; y < yEnd; y++) {
-//                 for (let x = tx; x < xEnd; x++) {
-//                     const idx = (y * width + x) * 4;
-//                     const lum = (77 * data[idx] + 150 * data[idx + 1] + 29 * data[idx + 2]) >> 8;
-//
-//                     if (lum < min) min = lum;
-//                     if (lum > max) max = lum;
-//                 }
-//             }
-//
-//             if (max === min) continue;
-//
-//             const scale = 255 / (max - min);
-//
-//             // Second pass: stretch tile
-//             for (let y = ty; y < yEnd; y++) {
-//                 for (let x = tx; x < xEnd; x++) {
-//                     const idx = (y * width + x) * 4;
-//                     const lum = (77 * data[idx] + 150 * data[idx + 1] + 29 * data[idx + 2]) >> 8;
-//                     const stretched = Math.max(0, Math.min(255, (lum - min) * scale));
-//
-//                     data[idx] = stretched;
-//                     data[idx + 1] = stretched;
-//                     data[idx + 2] = stretched;
-//                 }
-//             }
-//         }
+//         data[i] = gray;     // Red
+//         data[i + 1] = gray; // Green
+//         data[i + 2] = gray; // Blue
+//         // data[i + 3] is alpha, leave unchanged
 //     }
 //
 //     return imageData;
 // }
+//
+// function contrastStretch(imageData: ImageData): ImageData {
+//     const data = imageData.data;
+//
+//     let min = 255;
+//     let max = 0;
+//
+//     // First pass: compute luminance min/max
+//     for (let i = 0; i < data.length; i += 4) {
+//         const lum = (77 * data[i] + 150 * data[i + 1] + 29 * data[i + 2]) >> 8;
+//         if (lum < min) min = lum;
+//         if (lum > max) max = lum;
+//     }
+//
+//     if (max === min) return imageData;
+//
+//     const scale = 255 / (max - min);
+//
+//     // Second pass: apply stretch
+//     for (let i = 0; i < data.length; i += 4) {
+//         const lum = (77 * data[i] + 150 * data[i + 1] + 29 * data[i + 2]) >> 8;
+//         const stretched = Math.max(0, Math.min(255, (lum - min) * scale));
+//
+//         data[i] = stretched;
+//         data[i + 1] = stretched;
+//         data[i + 2] = stretched;
+//     }
+//
+//     return imageData;
+// }
+
+function adaptiveLocalContrast(imageData: ImageData, tileSize = 64): ImageData {
+    const { width, height, data } = imageData;
+
+    for (let ty = 0; ty < height; ty += tileSize) {
+        for (let tx = 0; tx < width; tx += tileSize) {
+
+            let min = 255;
+            let max = 0;
+
+            const yEnd = Math.min(ty + tileSize, height);
+            const xEnd = Math.min(tx + tileSize, width);
+
+            // First pass: find luminance min/max in tile
+            for (let y = ty; y < yEnd; y++) {
+                for (let x = tx; x < xEnd; x++) {
+                    const idx = (y * width + x) * 4;
+                    const lum = (77 * data[idx] + 150 * data[idx + 1] + 29 * data[idx + 2]) >> 8;
+
+                    if (lum < min) min = lum;
+                    if (lum > max) max = lum;
+                }
+            }
+
+            if (max === min) continue;
+
+            const scale = 255 / (max - min);
+
+            // Second pass: stretch tile
+            for (let y = ty; y < yEnd; y++) {
+                for (let x = tx; x < xEnd; x++) {
+                    const idx = (y * width + x) * 4;
+                    const lum = (77 * data[idx] + 150 * data[idx + 1] + 29 * data[idx + 2]) >> 8;
+                    const stretched = Math.max(0, Math.min(255, (lum - min) * scale));
+
+                    data[idx] = stretched;
+                    data[idx + 1] = stretched;
+                    data[idx + 2] = stretched;
+                }
+            }
+        }
+    }
+
+    return imageData;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -267,19 +285,19 @@ function BarcodeScanner() {
                     canvas.height
                 );
 
-                const base64 = canvas.toDataURL('image/png');
-                console.log(base64);
+
                 // Decode outside try/catch so state transitions are never silently swallowed.
                 let decoded: { text: string; format: string } | null = null;
                 try {
                     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-                    toGrayscale(imageData);
-
-                    contrastStretch(imageData);
+                    // toGrayscale(imageData);
+                    //
+                    //contrastStretch(imageData);
 
                     // OR
-                    //adaptiveLocalContrast(imageData, 64);
+                    adaptiveLocalContrast(imageData, 64);
+
 
                     decoded = await tryDecode(imageData);
                 } catch {
