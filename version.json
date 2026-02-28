@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "916dbcaf2861a48eaa4b06cb853e298cd5020853",
-        "shortHash": "916dbca",
+        "latestCommit": "c81e7f7caa8235032ca887c84ea1578eb682cc75",
+        "shortHash": "c81e7f7",
         "message": "Fixed portrait mode x and y and width",
-        "date": "2026-02-28T16:33:03+02:00"
+        "date": "2026-02-28T16:36:11+02:00"
     }
 }
