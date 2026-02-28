@@ -52,12 +52,34 @@ async function tryDecode(imageData: ImageData): Promise<{ text: string; format: 
     return null;
 }
 
+function getROI(width: number, height: number) {
+    const isPortrait = height > width;
+
+    if (isPortrait) {
+        return {
+            x: 0.025,
+            y: 0.50,
+            width: 0.95,
+            height: 0.30
+        };
+    }
+
+    return {
+        x: 0.15,
+        y: 0.40,
+        width: 0.70,
+        height: 0.40
+    };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 function BarcodeScanner() {
     const { t } = useTranslation();
 
     const [state, setState] = useState<ScannerState>({ phase: 'idle' });
+
+    const [roi, setRoi] = useState<ReturnType<typeof getROI> | null>(null);
 
     const barcode = state.phase === 'result' ? state.barcode : null;
     const rawValue = barcode?.rawValue;
@@ -119,10 +141,32 @@ function BarcodeScanner() {
                     return;
                 }
 
-                const scale = Math.min(1, MAX_DECODE_WIDTH / video.videoWidth);
-                canvas.width = Math.round(video.videoWidth * scale);
-                canvas.height = Math.round(video.videoHeight * scale);
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const width = video.videoWidth;
+                const height = video.videoHeight;
+
+                const roi = getROI(width, height);
+                setRoi(roi);
+                const roiX = width * roi.x;
+                const roiY = height * roi.y;
+                const roiWidth = width * roi.width;
+                const roiHeight = height * roi.height;
+
+                const scale = Math.min(1, MAX_DECODE_WIDTH / roiWidth);
+
+                canvas.width = Math.round(roiWidth * scale);
+                canvas.height = Math.round(roiHeight * scale);
+
+                ctx.drawImage(
+                    video,
+                    roiX,
+                    roiY,
+                    roiWidth,
+                    roiHeight,
+                    0,
+                    0,
+                    canvas.width,
+                    canvas.height
+                );
 
                 // Decode outside try/catch so state transitions are never silently swallowed.
                 let decoded: { text: string; format: string } | null = null;
@@ -189,12 +233,30 @@ function BarcodeScanner() {
             )}
 
             <Box width='100%' maxWidth={500} display={state.phase === 'scanning' ? 'block' : 'none'}>
-                <video
-                    ref={videoRef}
-                    style={{ width: '100%', borderRadius: 8, display: 'block' }}
-                    playsInline
-                    muted
-                />
+                <Box position="relative" width="100%">
+                    <video
+                        ref={videoRef}
+                        style={{ width: '100%', borderRadius: 8, display: 'block' }}
+                        playsInline
+                        muted
+                    />
+
+                    {state.phase === 'scanning' && roi && (
+                        <Box
+                            sx={{
+                                position: 'absolute',
+                                border: '3px solid #00ff88',
+                                borderRadius: 2,
+                                pointerEvents: 'none',
+                                left: `${roi?.x * 100}%`,
+                                top: `${roi?.y * 100}%`,
+                                width: `${roi?.width * 100}%`,
+                                height: `${roi?.height * 100}%`,
+                                boxSizing: 'border-box'
+                            }}
+                        />
+                    )}
+                </Box>
                 <Box textAlign='center' mt={2} display='flex' flexDirection='column' alignItems='center' gap={1}>
                     <TmTypography variant='body1' testid='barcodeScannerScanning'>
                         {t('barcodeScanner.scanning')}
