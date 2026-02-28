@@ -13,6 +13,8 @@ import cv from "@techstark/opencv-js";
 type BarcodeResult = {
     rawValue: string;
     format: string;
+    preprocessor?: string;
+    binarizer?: string;
 };
 
 type ScannerState =
@@ -337,10 +339,17 @@ function imageDataToBase64(imageData: ImageData): string {
     // returns: "data:image/png;base64,iVBORw0KGgoAAAANS..."
 }
 
+type DecodeSuccess = {
+    text: string;
+    format: string;
+    preprocessor: string;
+    binarizer: 'LocalAverage' | 'GlobalHistogram';
+};
+
 /** Try decoding with primary binarizer, then fallback binarizer. */
 async function tryDecode(
     originalImageData: ImageData
-): Promise<{ text: string; format: string } | null> {
+): Promise<DecodeSuccess | null> {
 
     for (const { name, fn } of preprocessors) {
 
@@ -357,7 +366,12 @@ async function tryDecode(
         let results = await readBarcodes(imageData, wasmReaderOptions);
 
         if (results.length > 0 && results[0].isValid && results[0].text) {
-            return { text: results[0].text, format: results[0].format };
+            return {
+                text: results[0].text,
+                format: results[0].format,
+                preprocessor: name,
+                binarizer: 'LocalAverage'
+            };
         }
 
         // Only fallback for lightweight passes
@@ -365,7 +379,12 @@ async function tryDecode(
             results = await readBarcodes(imageData, wasmReaderOptionsFallback);
 
             if (results.length > 0 && results[0].isValid && results[0].text) {
-                return { text: results[0].text, format: results[0].format };
+                return {
+                    text: results[0].text,
+                    format: results[0].format,
+                    preprocessor: name,
+                    binarizer: 'GlobalHistogram'
+                };
             }
         }
     }
@@ -453,6 +472,10 @@ function perspectiveCorrect(
     let maxContour: cv.Mat | null = null;
 
     try {
+
+
+        // Optional debug
+        console.log('Original Image:', canvas.toDataURL('image/png'));
         // -------- Stage 1: Aggressive preprocessing --------
         cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
 
@@ -866,7 +889,7 @@ function BarcodeScanner() {
 
 
                 // Decode outside try/catch so state transitions are never silently swallowed.
-                let decoded: { text: string; format: string } | null = null;
+                let decoded: DecodeSuccess | null = null;
                 try {
                     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
@@ -892,7 +915,15 @@ function BarcodeScanner() {
 
                 if (decoded) {
                     stopStream();
-                    setState({ phase: 'result', barcode: { rawValue: decoded.text, format: decoded.format } });
+                    setState({
+                        phase: 'result',
+                        barcode: {
+                            rawValue: decoded.text,
+                            format: decoded.format,
+                            preprocessor: decoded.preprocessor,
+                            binarizer: decoded.binarizer
+                        }
+                    });
                     return;
                 }
 
@@ -1028,6 +1059,19 @@ function BarcodeScanner() {
                                         </TmTypography>
                                     )}
                                 </Stack>
+                            </Stack>
+                            <Stack>
+                                <TmTypography testid='barcodeScannerNoStructuredData' variant='body1' color='textSecondary'>
+                                    Debug Info:
+                                </TmTypography>
+
+                                <TmTypography testid='barcodeScannerNoStructuredData' variant='body2' sx={{ mt: 1 }}>
+                                    <strong>Preprocessor:</strong> {state.barcode.preprocessor}
+                                </TmTypography>
+
+                                <TmTypography testid='barcodeScannerNoStructuredData' variant='body2'>
+                                    <strong>Binarizer:</strong> {state.barcode.binarizer}
+                                </TmTypography>
                             </Stack>
                         </Stack>
                     </Box>
