@@ -57,8 +57,8 @@ function getROI(width: number, height: number) {
 
     if (isPortrait) {
         return {
-            x: 0.05,
-            y: 0.55,
+            x: 0.5,
+            y: 0.05,
             width: 0.3,
             height: 0.9
         };
@@ -168,6 +168,8 @@ function BarcodeScanner() {
                     canvas.height
                 );
 
+                const base64 = canvas.toDataURL('image/png');
+                console.log(base64);
                 // Decode outside try/catch so state transitions are never silently swallowed.
                 let decoded: { text: string; format: string } | null = null;
                 try {
