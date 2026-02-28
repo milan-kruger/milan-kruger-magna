@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "e594a4e4c20b1307f669b0f01608a17b9f7accb3",
-        "shortHash": "e594a4e",
+        "latestCommit": "62b699f4e243cec159c06e20c001a67f53c736f0",
+        "shortHash": "62b699f",
         "message": "Added in ROI",
-        "date": "2026-02-28T16:12:01+02:00"
+        "date": "2026-02-28T16:26:16+02:00"
     }
 }
