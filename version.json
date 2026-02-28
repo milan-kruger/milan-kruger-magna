@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "e2cb6f1e92c5fccdbf7f0d8b0ac3776bf770d6cf",
-        "shortHash": "e2cb6f1",
-        "message": "Fixed ROI not being centred and added preprocessing",
-        "date": "2026-02-28T17:10:30+02:00"
+        "latestCommit": "d5e3123c040801fd243daca929d71f53019adb6d",
+        "shortHash": "d5e3123",
+        "message": "Added in grayscale",
+        "date": "2026-02-28T17:15:51+02:00"
     }
 }
