@@ -147,7 +147,8 @@ function contrastStretch(imageData: ImageData): ImageData {
 
 function adaptiveLocalContrastAndThreshold(
     imageData: ImageData,
-    tileSize = 32
+    tileSize = 32,
+    applyThreshold = true
 ): ImageData {
     const { width, height, data } = imageData;
 
@@ -162,6 +163,7 @@ function adaptiveLocalContrastAndThreshold(
             const yEnd = Math.min(ty + tileSize, height);
             const xEnd = Math.min(tx + tileSize, width);
 
+            // Pass 1: collect stats
             for (let y = ty; y < yEnd; y++) {
                 for (let x = tx; x < xEnd; x++) {
                     const idx = (y * width + x) * 4;
@@ -179,6 +181,7 @@ function adaptiveLocalContrastAndThreshold(
             const avg = sum / count;
             const scale = 255 / (max - min);
 
+            // Pass 2: apply local stretch (+ optional threshold)
             for (let y = ty; y < yEnd; y++) {
                 for (let x = tx; x < xEnd; x++) {
                     const idx = (y * width + x) * 4;
@@ -189,14 +192,17 @@ function adaptiveLocalContrastAndThreshold(
                         Math.min(255, (lum - min) * scale)
                     );
 
-                    const threshold =
-                        Math.max(0, Math.min(255, (avg - min) * scale));
+                    let finalValue = stretched;
 
-                    const final = stretched >= threshold ? 255 : 0;
+                    if (applyThreshold) {
+                        const threshold =
+                            Math.max(0, Math.min(255, (avg - min) * scale));
+                        finalValue = stretched >= threshold ? 255 : 0;
+                    }
 
-                    data[idx] = final;
-                    data[idx + 1] = final;
-                    data[idx + 2] = final;
+                    data[idx] = finalValue;
+                    data[idx + 1] = finalValue;
+                    data[idx + 2] = finalValue;
                 }
             }
         }
@@ -291,20 +297,43 @@ const preprocessors: { name: string; fn: PreprocessFn }[] = [
             )
     },
 
-    { name: 'adaptive-64', fn: (img) =>
-            adaptiveLocalContrastAndThreshold(
-                toGrayscale(img),
-                64
-            )
-    },
-
     { name: 'adaptive-128', fn: (img) =>
             adaptiveLocalContrastAndThreshold(
                 toGrayscale(img),
-                128
+                128,
+                false
+            )
+    },
+
+    { name: 'adaptive-64', fn: (img) =>
+            adaptiveLocalContrastAndThreshold(
+                toGrayscale(img),
+                64,
+                false,
+            )
+    },
+
+    { name: 'adaptive-32', fn: (img) =>
+            adaptiveLocalContrastAndThreshold(
+                toGrayscale(img),
+                32,
+                false
             )
     },
 ];
+
+
+function imageDataToBase64(imageData: ImageData): string {
+    const canvas = document.createElement('canvas');
+    canvas.width = imageData.width;
+    canvas.height = imageData.height;
+
+    const ctx = canvas.getContext('2d')!;
+    ctx.putImageData(imageData, 0, 0);
+
+    return canvas.toDataURL('image/png');
+    // returns: "data:image/png;base64,iVBORw0KGgoAAAANS..."
+}
 
 /** Try decoding with primary binarizer, then fallback binarizer. */
 async function tryDecode(
@@ -320,7 +349,8 @@ async function tryDecode(
         } catch {
             continue;
         }
-
+        console.log(`Preprocessor: ${name}`);
+        console.log(imageDataToBase64(imageData));
         // Try LocalAverage first
         let results = await readBarcodes(imageData, wasmReaderOptions);
 
@@ -383,7 +413,10 @@ function BarcodeScanner() {
             let stream: MediaStream;
             try {
                 stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: { exact: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+                    video: { facingMode: { exact: 'environment' },
+                        width: { ideal: 2560 },
+                        height: { ideal: 1440 }
+                    }
                 });
             } catch {
                 stream = await navigator.mediaDevices.getUserMedia({
@@ -396,10 +429,10 @@ function BarcodeScanner() {
             await videoRef.current.play();
             setState({ phase: 'scanning' });
 
-            const SCAN_INTERVAL_MS = 150;
+            const SCAN_INTERVAL_MS = 250;
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
-            const MAX_DECODE_WIDTH = 1440;
+            const MAX_DECODE_WIDTH = 2048;
 
             const scan = async () => {
                 const video = videoRef.current;
