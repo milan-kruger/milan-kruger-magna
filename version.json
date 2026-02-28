@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "51847414a6338f03e73491fe6ee055ea0fa557df",
-        "shortHash": "5184741",
-        "message": "Made ROI horizontal and smaller",
-        "date": "2026-02-28T17:32:54+02:00"
+        "latestCommit": "85d27fdcf31608a2b54cfc5b0ac19b1aeb3e06d3",
+        "shortHash": "85d27fd",
+        "message": "Fixed ROI",
+        "date": "2026-02-28T17:36:08+02:00"
     }
 }
