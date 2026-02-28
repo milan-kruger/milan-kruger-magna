@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "62b699f4e243cec159c06e20c001a67f53c736f0",
-        "shortHash": "62b699f",
-        "message": "Added in ROI",
-        "date": "2026-02-28T16:26:16+02:00"
+        "latestCommit": "916dbcaf2861a48eaa4b06cb853e298cd5020853",
+        "shortHash": "916dbca",
+        "message": "Fixed portrait mode x and y and width",
+        "date": "2026-02-28T16:33:03+02:00"
     }
 }
