@@ -75,7 +75,7 @@ function getROI(width: number, height: number) {
 
     if (isPortrait) {
         // For portrait: wider rectangle in the middle vertically
-        const roiWidth = 0.2;  // 80% of screen width
+        const roiWidth = 0.4;  // 80% of screen width
         const roiHeight = 0.6; // 40% of screen height
 
         return {
@@ -144,7 +144,7 @@ function contrastStretch(imageData: ImageData): ImageData {
     return imageData;
 }
 
-function adaptiveLocalContrast(imageData: ImageData, tileSize = 64): ImageData {
+function adaptiveLocalContrastAndThreshold(imageData: ImageData, tileSize = 64): ImageData {
     const { width, height, data } = imageData;
 
     for (let ty = 0; ty < height; ty += tileSize) {
@@ -152,11 +152,13 @@ function adaptiveLocalContrast(imageData: ImageData, tileSize = 64): ImageData {
 
             let min = 255;
             let max = 0;
+            let sum = 0;
+            let count = 0;
 
             const yEnd = Math.min(ty + tileSize, height);
             const xEnd = Math.min(tx + tileSize, width);
 
-            // First pass: find luminance min/max in tile
+            // First pass: find min, max, and sum
             for (let y = ty; y < yEnd; y++) {
                 for (let x = tx; x < xEnd; x++) {
                     const idx = (y * width + x) * 4;
@@ -164,23 +166,33 @@ function adaptiveLocalContrast(imageData: ImageData, tileSize = 64): ImageData {
 
                     if (lum < min) min = lum;
                     if (lum > max) max = lum;
+                    sum += lum;
+                    count++;
                 }
             }
 
             if (max === min) continue;
 
+            const avg = sum / count;
             const scale = 255 / (max - min);
 
-            // Second pass: stretch tile
+            // Second pass: apply contrast stretch AND threshold
             for (let y = ty; y < yEnd; y++) {
                 for (let x = tx; x < xEnd; x++) {
                     const idx = (y * width + x) * 4;
                     const lum = (77 * data[idx] + 150 * data[idx + 1] + 29 * data[idx + 2]) >> 8;
+
+                    // First stretch the contrast
                     const stretched = Math.max(0, Math.min(255, (lum - min) * scale));
 
-                    data[idx] = stretched;
-                    data[idx + 1] = stretched;
-                    data[idx + 2] = stretched;
+                    // Then threshold based on the stretched value
+                    // Using the local average as threshold (but adjusted to stretched range)
+                    const threshold = Math.max(0, Math.min(255, (avg - min) * scale));
+                    const final = stretched >= threshold ? 255 : 0;
+
+                    data[idx] = final;
+                    data[idx + 1] = final;
+                    data[idx + 2] = final;
                 }
             }
         }
@@ -188,6 +200,8 @@ function adaptiveLocalContrast(imageData: ImageData, tileSize = 64): ImageData {
 
     return imageData;
 }
+
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -296,7 +310,7 @@ function BarcodeScanner() {
                     contrastStretch(imageData);
 
                     // OR
-                    adaptiveLocalContrast(imageData, 64);
+                    adaptiveLocalContrastAndThreshold(imageData, 32);
 
 
                     decoded = await tryDecode(imageData);
