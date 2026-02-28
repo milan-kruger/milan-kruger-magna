@@ -351,8 +351,8 @@ async function tryDecode(
         } catch {
             continue;
         }
-        console.log(`Preprocessor: ${name}`);
-        console.log(imageDataToBase64(imageData));
+        // console.log(`Preprocessor: ${name}`);
+        // console.log(imageDataToBase64(imageData));
         // Try LocalAverage first
         let results = await readBarcodes(imageData, wasmReaderOptions);
 
@@ -376,100 +376,214 @@ type OpenCVModule = typeof cv & {
     onRuntimeInitialized?: () => void;
 };
 
+function distance(
+    a: { x: number; y: number },
+    b: { x: number; y: number }
+) {
+    return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function orderPoints(points: { x: number; y: number }[]): { x: number; y: number }[] {
+    // Sort points by y-coordinate first
+    const sortedByY = [...points].sort((a, b) => a.y - b.y);
+
+    // Top points (smaller y)
+    const topPoints = sortedByY.slice(0, 2).sort((a, b) => a.x - b.x);
+    // Bottom points (larger y)
+    const bottomPoints = sortedByY.slice(2, 4).sort((a, b) => a.x - b.x);
+
+    return [
+        topPoints[0],      // Top-left
+        topPoints[1],      // Top-right
+        bottomPoints[1],   // Bottom-right
+        bottomPoints[0]    // Bottom-left
+    ];
+}
+
 function perspectiveCorrect(
     canvas: HTMLCanvasElement,
     openCvReady: boolean
 ): ImageData | null {
-
     if (!openCvReady) return null;
 
+    console.log('Starting perspective correction');
+    console.log('Input image:', canvas.toDataURL('image/png'));
+
+    // Create a copy of the canvas to work with
     const src = cv.imread(canvas);
     const gray = new cv.Mat();
-    const blurred = new cv.Mat();
     const edges = new cv.Mat();
+    const threshold = new cv.Mat();
     const contours = new cv.MatVector();
     const hierarchy = new cv.Mat();
 
-    try {
-        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-        cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
-        cv.Canny(blurred, edges, 75, 200);
+    // Declare variables that need to be accessible in cleanup
+    let maxContour: cv.Mat | null = null;
 
+    try {
+        // -------- Stage 1: Convert to grayscale and detect edges --------
+        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+
+        // Apply adaptive threshold to handle varying lighting
+        cv.adaptiveThreshold(
+            gray,
+            threshold,
+            255,
+            cv.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv.THRESH_BINARY,
+            11,
+            2
+        );
+
+        // Find contours
         cv.findContours(
-            edges,
+            threshold,
             contours,
             hierarchy,
             cv.RETR_EXTERNAL,
             cv.CHAIN_APPROX_SIMPLE
         );
 
-        let biggest = null;
+        if (contours.size() === 0) {
+            cleanup();
+            return null;
+        }
+
+        // -------- Stage 2: Find the largest quadrilateral (likely the document) --------
         let maxArea = 0;
+        const imageArea = src.rows * src.cols;
+        const minArea = imageArea * 0.1; // At least 10% of image area
 
         for (let i = 0; i < contours.size(); i++) {
             const cnt = contours.get(i);
             const area = cv.contourArea(cnt);
 
-            if (area > maxArea) {
-                const approx = new cv.Mat();
-                cv.approxPolyDP(cnt, approx, 0.02 * cv.arcLength(cnt, true), true);
+            if (area < minArea) continue;
 
-                if (approx.rows === 4) {
-                    biggest = approx;
-                    maxArea = area;
-                } else {
-                    approx.delete();
-                }
+            // Approximate contour to polygon
+            const peri = cv.arcLength(cnt, true);
+            const approx = new cv.Mat();
+            cv.approxPolyDP(cnt, approx, 0.02 * peri, true);
+
+            // Check if it's a quadrilateral (4 corners)
+            if (approx.rows === 4 && area > maxArea) {
+                maxArea = area;
+                if (maxContour) maxContour.delete();
+                maxContour = approx.clone();
             }
+
+            approx.delete();
         }
 
-        if (!biggest) {
+        if (!maxContour) {
+            cleanup();
             return null;
         }
 
-        const width = 1000;
-        const height = 400;
+        // -------- Stage 3: Extract and order the 4 corner points --------
+        const points: { x: number; y: number }[] = [];
+        for (let i = 0; i < 4; i++) {
+            const x = maxContour.intPtr(i, 0)[0];
+            const y = maxContour.intPtr(i, 0)[1];
+            points.push({ x, y });
+        }
 
-        const srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, biggest.data32F);
+        // Order points: top-left, top-right, bottom-right, bottom-left
+        const ordered = orderPoints(points);
+
+        // Calculate destination dimensions (maintain aspect ratio)
+        const width1 = distance(ordered[0], ordered[1]);
+        const width2 = distance(ordered[3], ordered[2]);
+        const maxWidth = Math.max(Math.round(width1), Math.round(width2));
+
+        const height1 = distance(ordered[0], ordered[3]);
+        const height2 = distance(ordered[1], ordered[2]);
+        const maxHeight = Math.max(Math.round(height1), Math.round(height2));
+
+        // -------- Stage 4: Apply perspective transform --------
+        const srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
+            ordered[0].x, ordered[0].y,
+            ordered[1].x, ordered[1].y,
+            ordered[2].x, ordered[2].y,
+            ordered[3].x, ordered[3].y
+        ]);
+
         const dstTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
             0, 0,
-            width, 0,
-            width, height,
-            0, height
+            maxWidth - 1, 0,
+            maxWidth - 1, maxHeight - 1,
+            0, maxHeight - 1
         ]);
 
         const M = cv.getPerspectiveTransform(srcTri, dstTri);
         const warped = new cv.Mat();
-        cv.warpPerspective(src, warped, M, new cv.Size(width, height));
 
-        const result = new ImageData(
-            new Uint8ClampedArray(warped.data),
-            warped.cols,
-            warped.rows
+        cv.warpPerspective(
+            src,
+            warped,
+            M,
+            new cv.Size(maxWidth, maxHeight),
+            cv.INTER_LINEAR,
+            cv.BORDER_CONSTANT,
+            new cv.Scalar(255, 255, 255, 255) // White border
         );
 
-        // Cleanup
-        src.delete();
-        gray.delete();
-        blurred.delete();
-        edges.delete();
-        contours.delete();
-        hierarchy.delete();
-        biggest.delete();
-        srcTri.delete();
-        dstTri.delete();
-        M.delete();
-        warped.delete();
+        // -------- Stage 5: Convert OpenCV Mat to ImageData --------
+        // Ensure we have RGBA format
+        let resultMat = warped;
+        if (warped.channels() === 3) {
+            const rgba = new cv.Mat();
+            cv.cvtColor(warped, rgba, cv.COLOR_RGB2RGBA);
+            resultMat = rgba;
+            warped.delete();
+        } else if (warped.channels() === 1) {
+            const rgba = new cv.Mat();
+            cv.cvtColor(warped, rgba, cv.COLOR_GRAY2RGBA);
+            resultMat = rgba;
+            warped.delete();
+        }
 
-        return result;
-    } catch {
-        src.delete();
-        gray.delete();
-        blurred.delete();
-        edges.delete();
-        contours.delete();
-        hierarchy.delete();
+        // Create ImageData from resultMat
+        const imgData = new ImageData(
+            new Uint8ClampedArray(resultMat.data),
+            resultMat.cols,
+            resultMat.rows
+        );
+
+        // Debug: log the corrected image
+        console.log('Perspective corrected:', imageDataToBase64(imgData));
+
+        // Clean up resultMat if it's different from warped
+        if (resultMat !== warped) {
+            resultMat.delete();
+        }
+
+        cleanup();
+        return imgData;
+
+    } catch (error) {
+        console.error('Perspective correction failed:', error);
+        cleanup();
         return null;
+    }
+
+    function cleanup() {
+        // Safely delete all matrices
+        [src, gray, edges, threshold, hierarchy].forEach(mat => {
+            if (mat && !mat.isDeleted()) mat.delete();
+        });
+
+        // Delete contours
+        for (let i = 0; i < contours.size(); i++) {
+            const cnt = contours.get(i);
+            if (cnt && !cnt.isDeleted()) cnt.delete();
+        }
+        contours.delete();
+
+        // Delete maxContour if it exists
+        if (maxContour && !maxContour.isDeleted()) {
+            maxContour.delete();
+        }
     }
 }
 
