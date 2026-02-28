@@ -45,8 +45,8 @@ function getROI(width: number, height: number) {
 
     if (isPortrait) {
         // For portrait: wider rectangle in the middle vertically
-        const roiWidth = 0.4;  // 80% of screen width
-        const roiHeight = 0.7; // 40% of screen height
+        const roiWidth = 0.4;  // 40% of screen width
+        const roiHeight = 0.8; // 80% of screen height
 
         return {
             x: (1 - roiWidth) / 2,      // Centered horizontally
@@ -140,32 +140,6 @@ function contrastStretch(imageData: ImageData): ImageData {
     return imageData;
 }
 
-/* ----------------------------------------------------------- */
-/* GLOBAL THRESHOLD                                             */
-/* ----------------------------------------------------------- */
-
-function globalThreshold(imageData: ImageData): ImageData {
-    const { data } = imageData;
-
-    let sum = 0;
-    let count = 0;
-
-    for (let i = 0; i < data.length; i += 4) {
-        sum += data[i];
-        count++;
-    }
-
-    const threshold = sum / count;
-
-    for (let i = 0; i < data.length; i += 4) {
-        const value = data[i] >= threshold ? 255 : 0;
-        data[i] = value;
-        data[i + 1] = value;
-        data[i + 2] = value;
-    }
-
-    return imageData;
-}
 
 /* ----------------------------------------------------------- */
 /* ADAPTIVE LOCAL CONTRAST + THRESHOLD                         */
@@ -231,83 +205,58 @@ function adaptiveLocalContrastAndThreshold(
     return imageData;
 }
 
+
 /* ----------------------------------------------------------- */
-/* MULTI-PASS ADAPTIVE                                          */
+/* SHARPEN                                                     */
 /* ----------------------------------------------------------- */
 
-function multiPassAdaptiveThreshold(
-    imageData: ImageData
-): ImageData {
+
+function sharpen(imageData: ImageData): ImageData {
     const { width, height, data } = imageData;
+    const copy = new Uint8ClampedArray(data);
 
-    const working = new Uint8ClampedArray(data);
-    const largeTileAvg = new Float32Array(width * height);
+    const kernel = [
+        0, -1, 0,
+        -1, 5, -1,
+        0, -1, 0
+    ];
 
-    // Large tiles (128)
-    for (let ty = 0; ty < height; ty += 128) {
-        for (let tx = 0; tx < width; tx += 128) {
-            const yEnd = Math.min(ty + 128, height);
-            const xEnd = Math.min(tx + 128, width);
+    for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+            for (let c = 0; c < 3; c++) {
+                let sum = 0;
+                let k = 0;
 
-            let sum = 0;
-            let count = 0;
-
-            for (let y = ty; y < yEnd; y++) {
-                for (let x = tx; x < xEnd; x++) {
-                    const idx = (y * width + x) * 4;
-                    sum += working[idx];
-                    count++;
+                for (let ky = -1; ky <= 1; ky++) {
+                    for (let kx = -1; kx <= 1; kx++) {
+                        const idx = ((y + ky) * width + (x + kx)) * 4 + c;
+                        sum += copy[idx] * kernel[k++];
+                    }
                 }
-            }
 
-            const avg = sum / count;
-
-            for (let y = ty; y < yEnd; y++) {
-                for (let x = tx; x < xEnd; x++) {
-                    largeTileAvg[y * width + x] = avg;
-                }
+                const idx = (y * width + x) * 4 + c;
+                data[idx] = Math.max(0, Math.min(255, sum));
             }
         }
     }
 
-    // Small tiles (32)
-    for (let ty = 0; ty < height; ty += 32) {
-        for (let tx = 0; tx < width; tx += 32) {
-            const yEnd = Math.min(ty + 32, height);
-            const xEnd = Math.min(tx + 32, width);
+    return imageData;
+}
 
-            let sum = 0;
-            let count = 0;
+/* ----------------------------------------------------------- */
+/* GAMMA CORRECTION                                            */
+/* ----------------------------------------------------------- */
 
-            for (let y = ty; y < yEnd; y++) {
-                for (let x = tx; x < xEnd; x++) {
-                    const idx = (y * width + x) * 4;
-                    sum += working[idx];
-                    count++;
-                }
-            }
 
-            const smallAvg = sum / count;
+function gamma(imageData: ImageData, gamma = 0.7): ImageData {
+    const { data } = imageData;
+    const inv = 1 / gamma;
 
-            for (let y = ty; y < yEnd; y++) {
-                for (let x = tx; x < xEnd; x++) {
-                    const idx = (y * width + x) * 4;
-
-                    const blended =
-                        smallAvg * 0.7 +
-                        largeTileAvg[y * width + x] * 0.3;
-
-                    const final =
-                        working[idx] >= blended ? 255 : 0;
-
-                    data[idx] = final;
-                    data[idx + 1] = final;
-                    data[idx + 2] = final;
-                }
-            }
-        }
+    for (let i = 0; i < data.length; i += 4) {
+        const v = data[i] / 255;
+        const corrected = Math.pow(v, inv) * 255;
+        data[i] = data[i+1] = data[i+2] = corrected;
     }
-
     return imageData;
 }
 
@@ -318,44 +267,37 @@ function multiPassAdaptiveThreshold(
 const preprocessors: { name: string; fn: PreprocessFn }[] = [
     { name: 'none', fn: (img) => img },
 
-    { name: 'grayscale', fn: (img) => toGrayscale(img) },
-
-    { name: 'contrastStretch', fn: (img) =>
+    { name: 'contrast', fn: (img) =>
             contrastStretch(toGrayscale(img))
     },
 
-    { name: 'globalThreshold', fn: (img) =>
-            globalThreshold(toGrayscale(img))
+    { name: 'gamma+contrast', fn: (img) =>
+            contrastStretch(
+                gamma(
+                    toGrayscale(img),
+                    0.75
+                )
+            )
     },
 
-    { name: 'adaptive-128', fn: (img) =>
-            adaptiveLocalContrastAndThreshold(toGrayscale(img), 128)
+    { name: 'gamma+sharpen+contrast', fn: (img) =>
+            contrastStretch(
+                sharpen(
+                    gamma(
+                        toGrayscale(img),
+                        0.75
+                    )
+                )
+            )
     },
 
     { name: 'adaptive-64', fn: (img) =>
-            adaptiveLocalContrastAndThreshold(toGrayscale(img), 64)
-    },
-
-    { name: 'adaptive-32', fn: (img) =>
-            adaptiveLocalContrastAndThreshold(toGrayscale(img), 32)
-    },
-
-    { name: 'multiPassAdaptive', fn: (img) =>
-            multiPassAdaptiveThreshold(toGrayscale(img))
+            adaptiveLocalContrastAndThreshold(
+                toGrayscale(img),
+                64
+            )
     },
 ];
-
-function imageDataToBase64(imageData: ImageData): string {
-    const canvas = document.createElement('canvas');
-    canvas.width = imageData.width;
-    canvas.height = imageData.height;
-
-    const ctx = canvas.getContext('2d')!;
-    ctx.putImageData(imageData, 0, 0);
-
-    return canvas.toDataURL('image/png');
-    // returns: "data:image/png;base64,iVBORw0KGgoAAAANS..."
-}
 
 /** Try decoding with primary binarizer, then fallback binarizer. */
 async function tryDecode(
@@ -364,28 +306,28 @@ async function tryDecode(
 
     for (const { name, fn } of preprocessors) {
 
-        console.log("Trying preprocessor:", name);
-        // Work on a fresh clone for each preprocessing attempt
         const imageData = cloneImageData(originalImageData);
 
         try {
             fn(imageData);
         } catch {
-            continue; // preprocessing failed, try next
+            continue;
         }
-        console.log(imageDataToBase64(imageData));
-        // Try primary binarizer
+
+        // Try LocalAverage first
         let results = await readBarcodes(imageData, wasmReaderOptions);
 
         if (results.length > 0 && results[0].isValid && results[0].text) {
             return { text: results[0].text, format: results[0].format };
         }
 
-        // Try fallback binarizer
-        results = await readBarcodes(imageData, wasmReaderOptionsFallback);
+        // Only fallback for lightweight passes
+        if (name === 'none' || name === 'contrast') {
+            results = await readBarcodes(imageData, wasmReaderOptionsFallback);
 
-        if (results.length > 0 && results[0].isValid && results[0].text) {
-            return { text: results[0].text, format: results[0].format };
+            if (results.length > 0 && results[0].isValid && results[0].text) {
+                return { text: results[0].text, format: results[0].format };
+            }
         }
     }
 
