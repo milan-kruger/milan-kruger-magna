@@ -80,6 +80,81 @@ function getROI(width: number, height: number) {
     };
 }
 
+function contrastStretch(imageData: ImageData): ImageData {
+    const data = imageData.data;
+
+    let min = 255;
+    let max = 0;
+
+    // First pass: compute luminance min/max
+    for (let i = 0; i < data.length; i += 4) {
+        const lum = (77 * data[i] + 150 * data[i + 1] + 29 * data[i + 2]) >> 8;
+        if (lum < min) min = lum;
+        if (lum > max) max = lum;
+    }
+
+    if (max === min) return imageData;
+
+    const scale = 255 / (max - min);
+
+    // Second pass: apply stretch
+    for (let i = 0; i < data.length; i += 4) {
+        const lum = (77 * data[i] + 150 * data[i + 1] + 29 * data[i + 2]) >> 8;
+        const stretched = Math.max(0, Math.min(255, (lum - min) * scale));
+
+        data[i] = stretched;
+        data[i + 1] = stretched;
+        data[i + 2] = stretched;
+    }
+
+    return imageData;
+}
+
+function adaptiveLocalContrast(imageData: ImageData, tileSize = 64): ImageData {
+    const { width, height, data } = imageData;
+
+    for (let ty = 0; ty < height; ty += tileSize) {
+        for (let tx = 0; tx < width; tx += tileSize) {
+
+            let min = 255;
+            let max = 0;
+
+            const yEnd = Math.min(ty + tileSize, height);
+            const xEnd = Math.min(tx + tileSize, width);
+
+            // First pass: find luminance min/max in tile
+            for (let y = ty; y < yEnd; y++) {
+                for (let x = tx; x < xEnd; x++) {
+                    const idx = (y * width + x) * 4;
+                    const lum = (77 * data[idx] + 150 * data[idx + 1] + 29 * data[idx + 2]) >> 8;
+
+                    if (lum < min) min = lum;
+                    if (lum > max) max = lum;
+                }
+            }
+
+            if (max === min) continue;
+
+            const scale = 255 / (max - min);
+
+            // Second pass: stretch tile
+            for (let y = ty; y < yEnd; y++) {
+                for (let x = tx; x < xEnd; x++) {
+                    const idx = (y * width + x) * 4;
+                    const lum = (77 * data[idx] + 150 * data[idx + 1] + 29 * data[idx + 2]) >> 8;
+                    const stretched = Math.max(0, Math.min(255, (lum - min) * scale));
+
+                    data[idx] = stretched;
+                    data[idx + 1] = stretched;
+                    data[idx + 2] = stretched;
+                }
+            }
+        }
+    }
+
+    return imageData;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 function BarcodeScanner() {
@@ -181,7 +256,16 @@ function BarcodeScanner() {
                 // Decode outside try/catch so state transitions are never silently swallowed.
                 let decoded: { text: string; format: string } | null = null;
                 try {
-                    decoded = await tryDecode(ctx.getImageData(0, 0, canvas.width, canvas.height));
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+                    // Try only ONE at a time for benchmarking
+
+                    contrastStretch(imageData);
+
+                    // OR
+                    adaptiveLocalContrast(imageData, 64);
+
+                    decoded = await tryDecode(imageData);
                 } catch {
                     // no barcode detected this frame
                 }
@@ -243,10 +327,15 @@ function BarcodeScanner() {
             )}
 
             <Box width='100%' maxWidth={500} display={state.phase === 'scanning' ? 'block' : 'none'}>
-                <Box position="relative" width="100%">
+                <Box position="relative" display="inline-block">
                     <video
                         ref={videoRef}
-                        style={{ width: '100%', borderRadius: 8, display: 'block' }}
+                        style={{
+                            width: '100%',
+                            height: 'auto',
+                            display: 'block',
+                            borderRadius: 8,
+                        }}
                         playsInline
                         muted
                     />
