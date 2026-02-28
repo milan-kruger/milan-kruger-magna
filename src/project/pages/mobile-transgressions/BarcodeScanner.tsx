@@ -56,19 +56,27 @@ function getROI(width: number, height: number) {
     const isPortrait = height > width;
 
     if (isPortrait) {
+        // For portrait: wider rectangle in the middle vertically
+        const roiWidth = 0.4;  // 80% of screen width
+        const roiHeight = 0.8; // 40% of screen height
+
         return {
-            x: 0.3,
-            y: 0.3,
-            width: 0.4,
-            height: 0.7
+            x: (1 - roiWidth) / 2,      // Centered horizontally
+            y: (1 - roiHeight) / 2,      // Centered vertically
+            width: roiWidth,
+            height: roiHeight
         };
     }
 
+    // For landscape: wider rectangle in the middle horizontally
+    const roiWidth = 0.7;  // 70% of screen width
+    const roiHeight = 0.4; // 40% of screen height
+
     return {
-        x: 0.15,
-        y: 0.3,
-        width: 0.7,
-        height: 0.4
+        x: (1 - roiWidth) / 2,      // Centered horizontally
+        y: (1 - roiHeight) / 2,      // Centered vertically
+        width: roiWidth,
+        height: roiHeight
     };
 }
 
