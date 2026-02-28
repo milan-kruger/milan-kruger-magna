@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "35c5ec9bdfd57aaa59e2fd8694439130921fd045",
-        "shortHash": "35c5ec9",
-        "message": "Testing different ROI",
-        "date": "2026-02-28T20:57:36+02:00"
+        "latestCommit": "bb5962c348607e93c3bb370b91559a101ea74bb7",
+        "shortHash": "bb5962c",
+        "message": "Testing hard threshold",
+        "date": "2026-02-28T21:08:43+02:00"
     }
 }
