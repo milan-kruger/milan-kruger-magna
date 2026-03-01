@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "9d70c6b4197fa856bc9e9420b7c8914cf522e3e5",
-        "shortHash": "9d70c6b",
-        "message": "Fixed cv import",
-        "date": "2026-03-01T17:59:35+02:00"
+        "latestCommit": "b331dbe1df18f8f6e68c7c946f1500ee5be3b369",
+        "shortHash": "b331dbe",
+        "message": "Fixed comments",
+        "date": "2026-03-01T18:04:21+02:00"
     }
 }
