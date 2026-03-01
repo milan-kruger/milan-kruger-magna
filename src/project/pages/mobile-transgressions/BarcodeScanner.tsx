@@ -77,6 +77,22 @@ function getROI(width: number, height: number) {
     };
 }
 
+// Optionally shrink the ROI slightly to avoid edge artifacts that can interfere with decoding.
+function shrinkROI(
+    roi: ReturnType<typeof getROI>,
+    shrinkFactor = 0.1 // 10% smaller
+) {
+    const newWidth = roi.width * (1 - shrinkFactor);
+    const newHeight = roi.height * (1 - shrinkFactor);
+
+    return {
+        x: roi.x + (roi.width - newWidth) / 2,
+        y: roi.y + (roi.height - newHeight) / 2,
+        width: newWidth,
+        height: newHeight
+    };
+}
+
 type DecodeSuccess = {
     text: string;
     format: string;
@@ -151,6 +167,8 @@ function BarcodeScanner() {
     const scanTimerRef = useRef<number>(0);
 
     const [openCvReady, setOpenCvReady] = useState(false);
+    const visualRoi = roi ? shrinkROI(roi, 0.1) : null;
+
 
     useEffect(() => {
         const cvModule = cv as OpenCVModule;
@@ -352,10 +370,10 @@ function BarcodeScanner() {
                                 border: '3px solid #00ff88',
                                 borderRadius: 2,
                                 pointerEvents: 'none',
-                                left: `${roi?.x * 100}%`,
-                                top: `${roi?.y * 100}%`,
-                                width: `${roi?.width * 100}%`,
-                                height: `${roi?.height * 100}%`,
+                                left: `${visualRoi!.x * 100}%`,
+                                top: `${visualRoi!.y * 100}%`,
+                                width: `${visualRoi!.width * 100}%`,
+                                height: `${visualRoi!.height * 100}%`,
                                 boxSizing: 'border-box',
                                 transform: 'translate(0, 0)',
                             }}
