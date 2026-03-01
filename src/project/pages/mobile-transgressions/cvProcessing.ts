@@ -1,5 +1,4 @@
 import cv from "@techstark/opencv-js";
-import { imageDataToBase64 } from './imagePreprocessing';
 
 export type OpenCVModule = typeof cv & {
     onRuntimeInitialized?: () => void;
@@ -82,10 +81,6 @@ export function perspectiveCorrect(
     let maxContour: cv.Mat | null = null;
 
     try {
-
-
-        // Optional debug
-        console.log('Original Image:', canvas.toDataURL('image/png'));
         // -------- Stage 1: Aggressive preprocessing --------
         cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
 
@@ -110,7 +105,7 @@ export function perspectiveCorrect(
         );
 
         if (contours.size() === 0) {
-            console.log('No contours found');
+            console.error('No contours found');
             cleanup();
             return null;
         }
@@ -151,7 +146,6 @@ export function perspectiveCorrect(
 
         // If no quadrilateral found, try a different approach
         if (!maxContour) {
-            console.log('No quadrilateral found, trying minAreaRect approach');
             // Find the largest contour and try to fit a rectangle
             let largestContour: cv.Mat | null = null;
             maxArea = 0;
@@ -186,7 +180,7 @@ export function perspectiveCorrect(
         }
 
         if (!maxContour) {
-            console.log('No contour found for perspective correction');
+            console.error('No contour found for perspective correction');
             cleanup();
             return null;
         }
@@ -218,14 +212,13 @@ export function perspectiveCorrect(
         }
 
         if (points.length < 4) {
-            console.log('Not enough points extracted:', points.length);
+            console.error('Not enough points extracted:', points.length);
             cleanup();
             return null;
         }
 
         // If we have more than 4 points, reduce to 4 corners
         if (points.length > 4) {
-            console.log('Reducing', points.length, 'points to 4 corners');
             // Find convex hull
             const pointsMat = cv.matFromArray(points.length, 1, cv.CV_32SC2,
                 points.flatMap(p => [p.x, p.y]));
@@ -245,7 +238,7 @@ export function perspectiveCorrect(
 
         // Ensure we have exactly 4 points
         if (points.length !== 4) {
-            console.log('Invalid number of points after processing:', points.length);
+            console.error('Invalid number of points after processing:', points.length);
             cleanup();
             return null;
         }
@@ -255,7 +248,7 @@ export function perspectiveCorrect(
 
         // Validate ordered points
         if (!ordered || ordered.length !== 4) {
-            console.log('Invalid ordered points');
+            console.error('Invalid ordered points');
             cleanup();
             return null;
         }
@@ -264,7 +257,7 @@ export function perspectiveCorrect(
         const width1 = distance(ordered[0], ordered[1]);
         const width2 = distance(ordered[3], ordered[2]);
         if (width1 === 0 || width2 === 0) {
-            console.log('Invalid width calculation');
+            console.error('Invalid width calculation');
             cleanup();
             return null;
         }
@@ -344,9 +337,6 @@ export function perspectiveCorrect(
             warped.cols,
             warped.rows
         );
-
-        // Optional debug
-        console.log('Perspective correction applied:', imageDataToBase64(imgData));
 
         // Clean up transform matrices
         srcTri.delete();
