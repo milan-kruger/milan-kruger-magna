@@ -267,7 +267,7 @@ function BarcodeScanner() {
                 // Decode outside try/catch so state transitions are never silently swallowed.
                 let decoded: DecodeSuccess | null = null;
                 try {
-                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    // const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
                     // Round robin through different preprocessing strategies each frame to improve chances of decoding under various conditions (e.g. low light, glare, blur).
                     const idx = preprocessorIndexRef.current;
@@ -275,29 +275,26 @@ function BarcodeScanner() {
                     const t0 = performance.now();
 
                     // Try normal decode first
-                    decoded = await tryDecodeSingle(imageData, idx);
-
-                    const t1 = performance.now();
-                    console.log(`tryDecode took ${(t1 - t0).toFixed(2)} ms`);
-
-                    if (!openCvReady) {
-                        scanTimerRef.current = globalThis.setTimeout(scan, 250);
-                        return;
-                    }
-                    // If normal fails and OpenCV is ready → attempt perspective correction
-                    if (!decoded && openCvReady) {
+                    if (openCvReady) {
                         const corrected = perspectiveCorrect(canvas, openCvReady);
-
                         if (corrected) {
-
-                            const t0 = performance.now();
-
                             decoded = await tryDecodeSingle(corrected, idx);
-
-                            const t1 = performance.now();
-                            console.log(`tryDecode corrected took ${(t1 - t0).toFixed(2)} ms`);
                         }
                     }
+
+                    const t1 = performance.now();
+                    console.log(`tryDecode corrected took ${(t1 - t0).toFixed(2)} ms`);
+
+
+                    // const t2 = performance.now();
+                    //
+                    // if (!decoded) {
+                    //     decoded = await tryDecodeSingle(imageData, idx);
+                    // }
+                    //
+                    // const t3 = performance.now();
+                    // console.log(`tryDecode took ${(t3 - t2).toFixed(2)} ms`);
+
                     // Advance for next frame
                     preprocessorIndexRef.current =
                         (preprocessorIndexRef.current + 1) % preprocessors.length;
