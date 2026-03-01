@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "52d2d62aa3a4d5bb373268a3bebfbc3553980a28",
-        "shortHash": "52d2d62",
-        "message": "Reorganized preprocessing and made it round robin between frames",
-        "date": "2026-03-02T01:37:05+02:00"
+        "latestCommit": "649b2974dc2cfe30aeac469760ba4267b7c44af4",
+        "shortHash": "649b297",
+        "message": "Made corrected perspective only decoded",
+        "date": "2026-03-02T01:45:39+02:00"
     }
 }
