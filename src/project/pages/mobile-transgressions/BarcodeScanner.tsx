@@ -225,6 +225,8 @@ function BarcodeScanner() {
             const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
             const MAX_DECODE_WIDTH = 2048;
 
+            preprocessorIndexRef.current = 0;
+
             const scan = async () => {
                 const video = videoRef.current;
                 if (!video || !streamRef.current) return;
