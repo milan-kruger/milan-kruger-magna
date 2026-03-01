@@ -255,23 +255,24 @@ export function gamma(imageData: ImageData): ImageData {
 
 
 export const preprocessors: { name: string; fn: PreprocessFn }[] = [
-    { name: 'none', fn: (img) => img },
-
-    { name: 'contrast', fn: (img) =>
-            contrastStretch(img)
-    },
-
-    { name: 'gamma+contrast', fn: (img) =>
-            contrastStretch(
-                gamma(img)
-            )
-    },
-
     { name: 'gamma+sharpen+contrast', fn: (img) =>
             contrastStretch(
                 sharpen(
                     gamma(img)
                 )
+            )
+    },
+
+    { name: 'contrast', fn: (img) =>
+            contrastStretch(img)
+    },
+
+    { name: 'none', fn: (img) => img },
+
+
+    { name: 'gamma+contrast', fn: (img) =>
+            contrastStretch(
+                gamma(img)
             )
     },
 

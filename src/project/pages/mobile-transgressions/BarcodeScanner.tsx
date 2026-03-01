@@ -101,57 +101,42 @@ type DecodeSuccess = {
 };
 
 /** Try decoding with primary binarizer, then fallback binarizer. */
-async function tryDecode(
-    originalImageData: ImageData
+async function tryDecodeSingle(
+    originalImageData: ImageData,
+    preprocessorIndex: number
 ): Promise<DecodeSuccess | null> {
 
-    for (const { name, fn } of preprocessors) {
+    const { name, fn } = preprocessors[preprocessorIndex];
 
-        const imageData = toGrayscale(cloneImageData(originalImageData));
+    const imageData = toGrayscale(cloneImageData(originalImageData));
 
-        try {
-            const t0 = performance.now();
-                fn(imageData);
-            const t1 = performance.now();
-            console.log(`preprocessing took ${(t1 - t0).toFixed(2)} ms for preprocessor ${name}`);
-        } catch {
-            continue;
-        }
+    try {
+        fn(imageData);
+    } catch {
+        return null;
+    }
 
-        const t0 = performance.now();
+    let results = await readBarcodes(imageData, wasmReaderOptions);
 
-        // Try LocalAverage first
-        let results = await readBarcodes(imageData, wasmReaderOptions);
+    if (results.length > 0 && results[0].isValid && results[0].text) {
+        return {
+            text: results[0].text,
+            format: results[0].format,
+            preprocessor: name,
+            binarizer: 'LocalAverage'
+        };
+    }
 
-        const t1 = performance.now();
-        console.log(`Decoding took ${(t1 - t0).toFixed(2)} ms for localAverage`);
+    if (name === 'none' || name === 'contrast') {
+        results = await readBarcodes(imageData, wasmReaderOptionsFallback);
 
         if (results.length > 0 && results[0].isValid && results[0].text) {
             return {
                 text: results[0].text,
                 format: results[0].format,
                 preprocessor: name,
-                binarizer: 'LocalAverage'
+                binarizer: 'GlobalHistogram'
             };
-        }
-
-        // Only fallback for lightweight passes
-        if (name === 'none' || name === 'contrast') {
-            const t0 = performance.now();
-
-            results = await readBarcodes(imageData, wasmReaderOptionsFallback);
-
-            const t1 = performance.now();
-            console.log(`Decoding took ${(t1 - t0).toFixed(2)} ms for localAverage`);
-
-            if (results.length > 0 && results[0].isValid && results[0].text) {
-                return {
-                    text: results[0].text,
-                    format: results[0].format,
-                    preprocessor: name,
-                    binarizer: 'GlobalHistogram'
-                };
-            }
         }
     }
 
@@ -181,6 +166,8 @@ function BarcodeScanner() {
 
     const [openCvReady, setOpenCvReady] = useState(false);
     const visualRoi = roi ? shrinkROI(roi, 0.1) : null;
+
+    const preprocessorIndexRef = useRef(0);
 
 
     useEffect(() => {
@@ -280,10 +267,13 @@ function BarcodeScanner() {
                 try {
                     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
+                    // Round robin through different preprocessing strategies each frame to improve chances of decoding under various conditions (e.g. low light, glare, blur).
+                    const idx = preprocessorIndexRef.current;
+
                     const t0 = performance.now();
 
                     // Try normal decode first
-                    decoded = await tryDecode(imageData);
+                    decoded = await tryDecodeSingle(imageData, idx);
 
                     const t1 = performance.now();
                     console.log(`tryDecode took ${(t1 - t0).toFixed(2)} ms`);
@@ -294,16 +284,22 @@ function BarcodeScanner() {
                     }
                     // If normal fails and OpenCV is ready → attempt perspective correction
                     if (!decoded && openCvReady) {
-                        const t0 = performance.now();
-
                         const corrected = perspectiveCorrect(canvas, openCvReady);
 
-                        const t1 = performance.now();
-                        console.log(`perspectiveCorrect took ${(t1 - t0).toFixed(2)} ms`);
                         if (corrected) {
-                            decoded = await tryDecode(corrected);
+
+                            const t0 = performance.now();
+
+                            decoded = await tryDecodeSingle(corrected, idx);
+
+                            const t1 = performance.now();
+                            console.log(`tryDecode corrected took ${(t1 - t0).toFixed(2)} ms`);
                         }
                     }
+                    // Advance for next frame
+                    preprocessorIndexRef.current =
+                        (preprocessorIndexRef.current + 1) % preprocessors.length;
+
                 } catch {
                     // no barcode detected this frame
                 }
