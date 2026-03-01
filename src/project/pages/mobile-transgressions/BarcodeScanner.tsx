@@ -46,13 +46,16 @@ const wasmReaderOptionsFallback: ReaderOptions = {
     binarizer: 'GlobalHistogram',
 };
 
+// Define a centered rectangular ROI that covers most of the screen, with different aspect ratios for portrait vs landscape.
+// This helps ZXing focus on the barcode and ignore irrelevant background clutter,
+// improving both performance and accuracy.
 function getROI(width: number, height: number) {
     const isPortrait = height > width;
 
     if (isPortrait) {
-        // For portrait: wider rectangle in the middle vertically
-        const roiWidth = 0.8;  // 40% of screen width
-        const roiHeight = 0.15; // 80% of screen height
+        // For portrait: wider rectangle in the middle horizontally
+        const roiWidth = 0.8;  // 80% of screen width
+        const roiHeight = 0.15; // 15% of screen height
 
         return {
             x: (1 - roiWidth) / 2,      // Centered horizontally
@@ -95,8 +98,7 @@ async function tryDecode(
         } catch {
             continue;
         }
-        // console.log(`Preprocessor: ${name}`);
-        // console.log(imageDataToBase64(imageData));
+
         // Try LocalAverage first
         let results = await readBarcodes(imageData, wasmReaderOptions);
 
