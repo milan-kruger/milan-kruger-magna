@@ -136,56 +136,21 @@ function BarcodeScanner() {
 
     const [state, setState] = useState<ScannerState>({ phase: 'idle' });
 
-    // Remove the useState for roi - we'll derive it from video dimensions
+    const [roi, setRoi] = useState<ReturnType<typeof getROI> | null>(null);
+
     const barcode = state.phase === 'result' ? state.barcode : null;
     const rawValue = barcode?.rawValue;
-
     const parsedBarcode = useMemo(() => {
         if (!rawValue) return null;
-        if (rawValue.length < 10) return null;
         if (isCarDiskBarcode(rawValue)) return parseCarDiskBarcode(rawValue);
         return parseDLBarcode(rawValue);
     }, [rawValue]);
 
     const videoRef = useRef<HTMLVideoElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
-    const scanFrameRef = useRef<number>(0);
+    const scanTimerRef = useRef<number>(0);
 
     const [openCvReady, setOpenCvReady] = useState(false);
-
-    // Track video dimensions for ROI calculation
-    const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 });
-
-    // Memoize ROI based on video dimensions
-    const roi = useMemo(() => {
-        if (videoDimensions.width === 0 || videoDimensions.height === 0) {
-            return null;
-        }
-        return getROI(videoDimensions.width, videoDimensions.height);
-    }, [videoDimensions.width, videoDimensions.height]);
-
-    // Update dimensions when video metadata loads
-    useEffect(() => {
-        const video = videoRef.current;
-        if (!video) return;
-
-        const updateDimensions = () => {
-            if (video.videoWidth > 0 && video.videoHeight > 0) {
-                setVideoDimensions({
-                    width: video.videoWidth,
-                    height: video.videoHeight
-                });
-            }
-        };
-
-        video.addEventListener('loadedmetadata', updateDimensions);
-        video.addEventListener('resize', updateDimensions);
-
-        return () => {
-            video.removeEventListener('loadedmetadata', updateDimensions);
-            video.removeEventListener('resize', updateDimensions);
-        };
-    }, []);
 
     useEffect(() => {
         const cvModule = cv as OpenCVModule;
@@ -202,7 +167,7 @@ function BarcodeScanner() {
 
     /** Stop camera hardware only — no React state changes. */
     const stopStream = useCallback(() => {
-        cancelAnimationFrame(scanFrameRef.current); // Use cancelAnimationFrame, not clearTimeout
+        clearTimeout(scanTimerRef.current);
         if (streamRef.current) {
             streamRef.current.getTracks().forEach(track => track.stop());
             streamRef.current = null;
@@ -221,8 +186,7 @@ function BarcodeScanner() {
             let stream: MediaStream;
             try {
                 stream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: { exact: 'environment' },
+                    video: { facingMode: { exact: 'environment' },
                         width: { ideal: 2560 },
                         height: { ideal: 1440 }
                     }
@@ -238,42 +202,25 @@ function BarcodeScanner() {
             await videoRef.current.play();
             setState({ phase: 'scanning' });
 
+            const SCAN_INTERVAL_MS = 250;
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
             const MAX_DECODE_WIDTH = 2048;
 
-            let frameCount = 0;
-            const FRAME_SKIP = 2;
-
             const scan = async () => {
-                frameCount++;
-                if (frameCount % FRAME_SKIP !== 0) {
-                    scanFrameRef.current = requestAnimationFrame(scan);
-                    return;
-                }
-
                 const video = videoRef.current;
                 if (!video || !streamRef.current) return;
 
                 if (video.readyState < video.HAVE_ENOUGH_DATA || video.videoWidth === 0) {
-                    scanFrameRef.current = requestAnimationFrame(scan);
+                    scanTimerRef.current = globalThis.setTimeout(scan, SCAN_INTERVAL_MS);
                     return;
                 }
 
                 const width = video.videoWidth;
                 const height = video.videoHeight;
 
-                // Update dimensions if they've changed
-                if (width !== videoDimensions.width || height !== videoDimensions.height) {
-                    setVideoDimensions({ width, height });
-                }
-
-                // Use the memoized roi - it will be updated via the useEffect above
-                if (!roi) {
-                    scanFrameRef.current = requestAnimationFrame(scan);
-                    return;
-                }
-
+                const roi = getROI(width, height);
+                setRoi(roi);
                 const roiX = width * roi.x;
                 const roiY = height * roi.y;
                 const roiWidth = width * roi.width;
@@ -296,6 +243,7 @@ function BarcodeScanner() {
                     canvas.height
                 );
 
+
                 // Decode outside try/catch so state transitions are never silently swallowed.
                 let decoded: DecodeSuccess | null = null;
                 try {
@@ -304,6 +252,10 @@ function BarcodeScanner() {
                     // Try normal decode first
                     decoded = await tryDecode(imageData);
 
+                    if (!openCvReady) {
+                        scanTimerRef.current = globalThis.setTimeout(scan, 250);
+                        return;
+                    }
                     // If normal fails and OpenCV is ready → attempt perspective correction
                     if (!decoded && openCvReady) {
                         const corrected = perspectiveCorrect(canvas, openCvReady);
@@ -330,26 +282,20 @@ function BarcodeScanner() {
                     });
                     return;
                 }
-                scanFrameRef.current = requestAnimationFrame(scan);
+
+                if (streamRef.current) {
+                    scanTimerRef.current = globalThis.setTimeout(scan, SCAN_INTERVAL_MS);
+                }
             };
 
-            // Cancel any existing animation frame before starting new one
-            if (scanFrameRef.current) {
-                cancelAnimationFrame(scanFrameRef.current);
-            }
-            scanFrameRef.current = requestAnimationFrame(scan);
+            scanTimerRef.current = globalThis.setTimeout(scan, 0);
         } catch {
             setState({ phase: 'idle', error: t('barcodeScanner.cameraError') });
         }
-    }, [t, stopStream, openCvReady, roi, videoDimensions.width, videoDimensions.height]); // Add dependencies
+    }, [t, stopStream, openCvReady]);
 
     useEffect(() => {
-        return () => {
-            stopStream();
-            if (scanFrameRef.current) {
-                cancelAnimationFrame(scanFrameRef.current);
-            }
-        };
+        return () => stopStream();
     }, [stopStream]);
 
     return (
@@ -406,10 +352,10 @@ function BarcodeScanner() {
                                 border: '3px solid #00ff88',
                                 borderRadius: 2,
                                 pointerEvents: 'none',
-                                left: `${roi.x * 100}%`,
-                                top: `${roi.y * 100}%`,
-                                width: `${roi.width * 100}%`,
-                                height: `${roi.height * 100}%`,
+                                left: `${roi?.x * 100}%`,
+                                top: `${roi?.y * 100}%`,
+                                width: `${roi?.width * 100}%`,
+                                height: `${roi?.height * 100}%`,
                                 boxSizing: 'border-box',
                                 transform: 'translate(0, 0)',
                             }}
@@ -440,7 +386,7 @@ function BarcodeScanner() {
                         maxHeight='60vh'
                         overflow='auto'
                     >
-                        <Stack gap={2}> {/* Reduced gap from 10 to 2 */}
+                        <Stack gap={10}>
                             <TmTypography variant='body2' testid='barcodeScannerResultFormat' color='textSecondary'>
                                 {t('barcodeScanner.format')}: {state.barcode.format}
                             </TmTypography>
@@ -474,9 +420,11 @@ function BarcodeScanner() {
                                 <TmTypography testid='barcodeScannerNoStructuredData' variant='body1' color='textSecondary'>
                                     Debug Info:
                                 </TmTypography>
+
                                 <TmTypography testid='barcodeScannerNoStructuredData' variant='body2' sx={{ mt: 1 }}>
                                     <strong>Preprocessor:</strong> {state.barcode.preprocessor}
                                 </TmTypography>
+
                                 <TmTypography testid='barcodeScannerNoStructuredData' variant='body2'>
                                     <strong>Binarizer:</strong> {state.barcode.binarizer}
                                 </TmTypography>
