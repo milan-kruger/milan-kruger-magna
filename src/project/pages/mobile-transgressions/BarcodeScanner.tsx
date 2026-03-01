@@ -148,7 +148,7 @@ function BarcodeScanner() {
 
     const videoRef = useRef<HTMLVideoElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
-    const scanTimerRef = useRef<number>(0);
+    const scanFrameRef = useRef<number>(0);
 
     const [openCvReady, setOpenCvReady] = useState(false);
 
@@ -167,7 +167,7 @@ function BarcodeScanner() {
 
     /** Stop camera hardware only — no React state changes. */
     const stopStream = useCallback(() => {
-        clearTimeout(scanTimerRef.current);
+        clearTimeout(scanFrameRef.current);
         if (streamRef.current) {
             streamRef.current.getTracks().forEach(track => track.stop());
             streamRef.current = null;
@@ -202,7 +202,7 @@ function BarcodeScanner() {
             await videoRef.current.play();
             setState({ phase: 'scanning' });
 
-            const SCAN_INTERVAL_MS = 250;
+
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
             const MAX_DECODE_WIDTH = 2048;
@@ -212,7 +212,7 @@ function BarcodeScanner() {
                 if (!video || !streamRef.current) return;
 
                 if (video.readyState < video.HAVE_ENOUGH_DATA || video.videoWidth === 0) {
-                    scanTimerRef.current = globalThis.setTimeout(scan, SCAN_INTERVAL_MS);
+                    scanFrameRef.current = requestAnimationFrame(scan);
                     return;
                 }
 
@@ -253,7 +253,7 @@ function BarcodeScanner() {
                     decoded = await tryDecode(imageData);
 
                     if (!openCvReady) {
-                        scanTimerRef.current = globalThis.setTimeout(scan, 250);
+                        cancelAnimationFrame(scanFrameRef.current);
                         return;
                     }
                     // If normal fails and OpenCV is ready → attempt perspective correction
@@ -282,20 +282,25 @@ function BarcodeScanner() {
                     });
                     return;
                 }
+              scanFrameRef.current = requestAnimationFrame(scan);
 
-                if (streamRef.current) {
-                    scanTimerRef.current = globalThis.setTimeout(scan, SCAN_INTERVAL_MS);
-                }
             };
-
-            scanTimerRef.current = globalThis.setTimeout(scan, 0);
+            if (streamRef.current) {
+              cancelAnimationFrame(scanFrameRef.current);
+            }
+            scanFrameRef.current = requestAnimationFrame(scan);
         } catch {
             setState({ phase: 'idle', error: t('barcodeScanner.cameraError') });
         }
     }, [t, stopStream, openCvReady]);
 
     useEffect(() => {
-        return () => stopStream();
+        return () => {
+            stopStream();
+            if (scanFrameRef.current) {
+                cancelAnimationFrame(scanFrameRef.current);
+            }
+        };
     }, [stopStream]);
 
     return (
