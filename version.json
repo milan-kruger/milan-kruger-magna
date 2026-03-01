@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "363e2e3112a086b3b7e588255b245cba93bae3df",
-        "shortHash": "363e2e3",
-        "message": "Added in debug info",
-        "date": "2026-03-01T01:20:10+02:00"
+        "latestCommit": "eb672304f5f412a01669d9e756405d13188fcec4",
+        "shortHash": "eb67230",
+        "message": "Made ROI fullscreen for testing",
+        "date": "2026-03-01T12:57:39+02:00"
     }
 }
