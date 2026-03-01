@@ -10,6 +10,7 @@ import { parseDLBarcode } from './dlBarcodeParser';
 import { parseCarDiskBarcode, isCarDiskBarcode } from './carDiskBarcodeParser';
 import { cloneImageData, preprocessors } from './imagePreprocessing';
 import { perspectiveCorrect, OpenCVModule } from './cvProcessing';
+import cv from "@techstark/opencv-js";
 
 type BarcodeResult = {
     rawValue: string;
@@ -72,7 +73,6 @@ function getROI(width: number, height: number) {
         height: roiHeight
     };
 }
-
 
 type DecodeSuccess = {
     text: string;
