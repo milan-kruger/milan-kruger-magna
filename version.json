@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "3abc42c25f39a039eb9e00e1611d2c769820a471",
-        "shortHash": "3abc42c",
-        "message": "Made visual ROI slightly smaller to help decoding",
-        "date": "2026-03-02T00:45:17+02:00"
+        "latestCommit": "660ae6f3950e21fd7d55b86332a059ea6e5cfd1b",
+        "shortHash": "660ae6f",
+        "message": "Added in comments and logging",
+        "date": "2026-03-02T00:53:53+02:00"
     }
 }
