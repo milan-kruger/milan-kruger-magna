@@ -110,7 +110,10 @@ async function tryDecode(
         const imageData = cloneImageData(originalImageData);
 
         try {
-            fn(imageData);
+            const t0 = performance.now();
+                fn(imageData);
+            const t1 = performance.now();
+            console.log(`tryDecode took ${(t1 - t0).toFixed(2)} ms for preprocessor ${name}`);
         } catch {
             continue;
         }
