@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "85b4e704d59ecceff945ba843ee99c63bebe9ca7",
-        "shortHash": "85b4e70",
-        "message": "Testing request frame instead of fixed scan intervals",
-        "date": "2026-03-01T19:26:23+02:00"
+        "latestCommit": "35c3843c182f04219a879d62b76a0475818a8c94",
+        "shortHash": "35c3843",
+        "message": "Added in a normalize brightness",
+        "date": "2026-03-01T19:38:25+02:00"
     }
 }
