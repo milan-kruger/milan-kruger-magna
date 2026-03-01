@@ -245,17 +245,19 @@ export function gamma(imageData: ImageData, gamma = 0.7): ImageData {
 /* DECLARATIVE PREPROCESSOR LIST                                */
 /* ----------------------------------------------------------- */
 
+
+
 export const preprocessors: { name: string; fn: PreprocessFn }[] = [
     { name: 'none', fn: (img) => img },
 
     { name: 'contrast', fn: (img) =>
-            contrastStretch(toGrayscale(img))
+            contrastStretch(img)
     },
 
     { name: 'gamma+contrast', fn: (img) =>
             contrastStretch(
                 gamma(
-                    toGrayscale(img),
+                    img,
                     0.75
                 )
             )
@@ -265,7 +267,7 @@ export const preprocessors: { name: string; fn: PreprocessFn }[] = [
             contrastStretch(
                 sharpen(
                     gamma(
-                        toGrayscale(img),
+                        img,
                         0.75
                     )
                 )
@@ -274,7 +276,7 @@ export const preprocessors: { name: string; fn: PreprocessFn }[] = [
 
     { name: 'adaptive-128', fn: (img) =>
             adaptiveLocalContrastAndThreshold(
-                toGrayscale(img),
+                img,
                 128,
                 false
             )
@@ -282,7 +284,7 @@ export const preprocessors: { name: string; fn: PreprocessFn }[] = [
 
     { name: 'adaptive-64', fn: (img) =>
             adaptiveLocalContrastAndThreshold(
-                toGrayscale(img),
+                img,
                 64,
                 false,
             )
@@ -290,7 +292,7 @@ export const preprocessors: { name: string; fn: PreprocessFn }[] = [
 
     { name: 'adaptive-32', fn: (img) =>
             adaptiveLocalContrastAndThreshold(
-                toGrayscale(img),
+                img,
                 32,
                 false
             )
