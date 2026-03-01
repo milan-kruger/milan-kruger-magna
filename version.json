@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "35c3843c182f04219a879d62b76a0475818a8c94",
-        "shortHash": "35c3843",
-        "message": "Added in a normalize brightness",
-        "date": "2026-03-01T19:38:25+02:00"
+        "latestCommit": "f524c89b1cda1fe9cea56d35148856b36c53098a",
+        "shortHash": "f524c89",
+        "message": "Added in optimizations to scanning frequency",
+        "date": "2026-03-01T21:06:12+02:00"
     }
 }
