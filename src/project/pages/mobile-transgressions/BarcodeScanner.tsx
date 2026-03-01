@@ -238,6 +238,9 @@ function BarcodeScanner() {
                     return;
                 }
 
+                const frameStart = performance.now();
+
+                // Draw frame
                 const width = video.videoWidth;
                 const height = video.videoHeight;
 
@@ -269,7 +272,6 @@ function BarcodeScanner() {
                 // Decode outside try/catch so state transitions are never silently swallowed.
                 let decoded: DecodeSuccess | null = null;
 
-                const frameStart = performance.now();
                 try {
 
                     // Try normal decode first
