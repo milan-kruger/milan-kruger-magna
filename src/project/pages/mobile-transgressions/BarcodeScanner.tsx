@@ -225,8 +225,6 @@ function BarcodeScanner() {
             const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
             const MAX_DECODE_WIDTH = 2048;
 
-            let decodeAmount = 0;
-
             const scan = async () => {
                 const video = videoRef.current;
                 if (!video || !streamRef.current) return;
@@ -269,9 +267,13 @@ function BarcodeScanner() {
                 try {
                     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-                    console.log(decodeAmount++);
+                    const t0 = performance.now();
+
                     // Try normal decode first
                     decoded = await tryDecode(imageData);
+
+                    const t1 = performance.now();
+                    console.log(`tryDecode took ${(t1 - t0).toFixed(2)} ms`);
 
                     if (!openCvReady) {
                         scanTimerRef.current = globalThis.setTimeout(scan, 250);
@@ -279,7 +281,12 @@ function BarcodeScanner() {
                     }
                     // If normal fails and OpenCV is ready → attempt perspective correction
                     if (!decoded && openCvReady) {
+                        const t0 = performance.now();
+
                         const corrected = perspectiveCorrect(canvas, openCvReady);
+
+                        const t1 = performance.now();
+                        console.log(`perspectiveCorrect took ${(t1 - t0).toFixed(2)} ms`);
                         if (corrected) {
                             decoded = await tryDecode(corrected);
                         }
