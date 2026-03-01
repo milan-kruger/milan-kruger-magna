@@ -31,7 +31,7 @@ const wasmReaderOptions: ReaderOptions = {
     formats: ['PDF417'],
     tryHarder: true,
     tryRotate: true,
-    tryDownscale: false,
+    tryDownscale: true,
     tryDenoise: false,      // experimental; expensive on mobile CPUs
     maxNumberOfSymbols: 1,
     textMode: 'Plain',
