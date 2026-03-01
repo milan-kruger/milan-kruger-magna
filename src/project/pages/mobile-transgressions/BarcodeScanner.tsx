@@ -32,7 +32,7 @@ const wasmReaderOptions: ReaderOptions = {
     tryHarder: true,
     tryRotate: true,
     tryDownscale: true,
-    tryDenoise: false,      // experimental; expensive on mobile CPUs
+    tryDenoise: true,      // experimental; expensive on mobile CPUs
     maxNumberOfSymbols: 1,
     textMode: 'Plain',
     binarizer: 'LocalAverage',
@@ -113,13 +113,18 @@ async function tryDecode(
             const t0 = performance.now();
                 fn(imageData);
             const t1 = performance.now();
-            console.log(`tryDecode took ${(t1 - t0).toFixed(2)} ms for preprocessor ${name}`);
+            console.log(`preprocessing took ${(t1 - t0).toFixed(2)} ms for preprocessor ${name}`);
         } catch {
             continue;
         }
 
+        const t0 = performance.now();
+
         // Try LocalAverage first
         let results = await readBarcodes(imageData, wasmReaderOptions);
+
+        const t1 = performance.now();
+        console.log(`Decoding took ${(t1 - t0).toFixed(2)} ms for localAverage`);
 
         if (results.length > 0 && results[0].isValid && results[0].text) {
             return {
@@ -132,7 +137,12 @@ async function tryDecode(
 
         // Only fallback for lightweight passes
         if (name === 'none' || name === 'contrast') {
+            const t0 = performance.now();
+
             results = await readBarcodes(imageData, wasmReaderOptionsFallback);
+
+            const t1 = performance.now();
+            console.log(`Decoding took ${(t1 - t0).toFixed(2)} ms for localAverage`);
 
             if (results.length > 0 && results[0].isValid && results[0].text) {
                 return {
