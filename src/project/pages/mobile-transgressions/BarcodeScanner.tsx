@@ -225,6 +225,8 @@ function BarcodeScanner() {
             const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
             const MAX_DECODE_WIDTH = 2048;
 
+            let decodeAmount = 0;
+
             const scan = async () => {
                 const video = videoRef.current;
                 if (!video || !streamRef.current) return;
@@ -267,6 +269,7 @@ function BarcodeScanner() {
                 try {
                     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
+                    console.log(decodeAmount++);
                     // Try normal decode first
                     decoded = await tryDecode(imageData);
 
@@ -370,6 +373,7 @@ function BarcodeScanner() {
                                 border: '3px solid #00ff88',
                                 borderRadius: 2,
                                 pointerEvents: 'none',
+                                // Visual ROI is a slightly smaller rectangle inside the actual ROI to avoid edge artifacts that can interfere with decoding.
                                 left: `${visualRoi!.x * 100}%`,
                                 top: `${visualRoi!.y * 100}%`,
                                 width: `${visualRoi!.width * 100}%`,
