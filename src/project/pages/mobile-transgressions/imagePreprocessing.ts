@@ -80,16 +80,18 @@ export function toGrayscale(imageData: ImageData): ImageData {
 /* CONTRAST STRETCH                                             */
 /* ----------------------------------------------------------- */
 
+
 export function contrastStretch(imageData: ImageData): ImageData {
     const { data } = imageData;
 
     let min = 255;
     let max = 0;
 
+    // Pass 1: find min/max
     for (let i = 0; i < data.length; i += 4) {
-        const lum =
-            (77 * data[i] + 150 * data[i + 1] + 29 * data[i + 2]) >> 8;
 
+        // this assumes the image is already grayscale, so we can just read the R channel for luminance
+        const lum = data[i]; // grayscale, no recompute
         if (lum < min) min = lum;
         if (lum > max) max = lum;
     }
@@ -98,18 +100,12 @@ export function contrastStretch(imageData: ImageData): ImageData {
 
     const scale = 255 / (max - min);
 
+    // Pass 2: stretch
     for (let i = 0; i < data.length; i += 4) {
-        const lum =
-            (77 * data[i] + 150 * data[i + 1] + 29 * data[i + 2]) >> 8;
+        const stretched = (data[i] - min) * scale;
+        const v = stretched < 0 ? 0 : stretched > 255 ? 255 : stretched;
 
-        const stretched = Math.max(
-            0,
-            Math.min(255, (lum - min) * scale)
-        );
-
-        data[i] = stretched;
-        data[i + 1] = stretched;
-        data[i + 2] = stretched;
+        data[i] = data[i + 1] = data[i + 2] = v;
     }
 
     return imageData;
@@ -204,20 +200,22 @@ export function sharpen(imageData: ImageData): ImageData {
 
     for (let y = 1; y < height - 1; y++) {
         for (let x = 1; x < width - 1; x++) {
-            for (let c = 0; c < 3; c++) {
-                let sum = 0;
-                let k = 0;
 
-                for (let ky = -1; ky <= 1; ky++) {
-                    for (let kx = -1; kx <= 1; kx++) {
-                        const idx = ((y + ky) * width + (x + kx)) * 4 + c;
-                        sum += copy[idx] * kernel[k++];
-                    }
+            let sum = 0;
+            let k = 0;
+
+            for (let ky = -1; ky <= 1; ky++) {
+                const rowOffset = (y + ky) * width * 4;
+                for (let kx = -1; kx <= 1; kx++) {
+                    const idx = rowOffset + (x + kx) * 4;
+                    sum += copy[idx] * kernel[k++];
                 }
-
-                const idx = (y * width + x) * 4 + c;
-                data[idx] = Math.max(0, Math.min(255, sum));
             }
+
+            const idx = (y * width + x) * 4;
+            const v = sum < 0 ? 0 : sum > 255 ? 255 : sum;
+
+            data[idx] = data[idx + 1] = data[idx + 2] = v;
         }
     }
 
@@ -228,16 +226,25 @@ export function sharpen(imageData: ImageData): ImageData {
 /* GAMMA CORRECTION                                            */
 /* ----------------------------------------------------------- */
 
-
-export function gamma(imageData: ImageData, gamma = 0.7): ImageData {
-    const { data } = imageData;
+function buildGammaLUT(gamma: number) {
     const inv = 1 / gamma;
+    const lut = new Uint8ClampedArray(256);
+    for (let i = 0; i < 256; i++) {
+        lut[i] = Math.pow(i / 255, inv) * 255;
+    }
+    return lut;
+}
+
+const gamma075LUT = buildGammaLUT(0.75);
+
+export function gamma(imageData: ImageData): ImageData {
+    const { data } = imageData;
 
     for (let i = 0; i < data.length; i += 4) {
-        const v = data[i] / 255;
-        const corrected = Math.pow(v, inv) * 255;
-        data[i] = data[i+1] = data[i+2] = corrected;
+        const v = gamma075LUT[data[i]];
+        data[i] = data[i+1] = data[i+2] = v;
     }
+
     return imageData;
 }
 
@@ -256,20 +263,14 @@ export const preprocessors: { name: string; fn: PreprocessFn }[] = [
 
     { name: 'gamma+contrast', fn: (img) =>
             contrastStretch(
-                gamma(
-                    img,
-                    0.75
-                )
+                gamma(img)
             )
     },
 
     { name: 'gamma+sharpen+contrast', fn: (img) =>
             contrastStretch(
                 sharpen(
-                    gamma(
-                        img,
-                        0.75
-                    )
+                    gamma(img)
                 )
             )
     },
