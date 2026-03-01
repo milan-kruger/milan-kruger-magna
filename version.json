@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "649b2974dc2cfe30aeac469760ba4267b7c44af4",
-        "shortHash": "649b297",
-        "message": "Made corrected perspective only decoded",
-        "date": "2026-03-02T01:45:39+02:00"
+        "latestCommit": "3dbb509c22a2671ba5ae72a77445bf6cfa0b6b02",
+        "shortHash": "3dbb509",
+        "message": "Made faster scan timeout",
+        "date": "2026-03-02T01:56:38+02:00"
     }
 }
