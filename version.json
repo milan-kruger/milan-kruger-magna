@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "cafd5b1731019185aec857b99506ab26b5f76dc6",
-        "shortHash": "cafd5b1",
-        "message": "Reverted optimizations",
-        "date": "2026-03-01T21:14:33+02:00"
+        "latestCommit": "525c7b3a6dcc6abb348b60debf1c3d9925abc029",
+        "shortHash": "525c7b3",
+        "message": "Added in try downscale",
+        "date": "2026-03-02T00:22:02+02:00"
     }
 }
