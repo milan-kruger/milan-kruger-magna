@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "54a17689e26fb4e21ea4fdb668bb653f252f7344",
-        "shortHash": "54a1768",
-        "message": "Cached greyscale for performance",
-        "date": "2026-03-02T01:06:34+02:00"
+        "latestCommit": "0c88eed0c85676c87f542f8c741c915f54043897",
+        "shortHash": "0c88eed",
+        "message": "Optimized preprocessing pipeline",
+        "date": "2026-03-02T01:19:19+02:00"
     }
 }
