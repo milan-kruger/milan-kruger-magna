@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "b46ab6b80a636fc732c1a6e30739ae71ad647c40",
-        "shortHash": "b46ab6b",
-        "message": "Removed brightness normalizer",
-        "date": "2026-03-02T00:26:50+02:00"
+        "latestCommit": "3abc42c25f39a039eb9e00e1611d2c769820a471",
+        "shortHash": "3abc42c",
+        "message": "Made visual ROI slightly smaller to help decoding",
+        "date": "2026-03-02T00:45:17+02:00"
     }
 }
