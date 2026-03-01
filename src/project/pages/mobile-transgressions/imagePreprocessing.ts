@@ -17,45 +17,45 @@ export function cloneImageData(imageData: ImageData): ImageData {
 /* BRIGHTNESS NORMALIZATION (MANDATORY CHECK)                  */
 /* ----------------------------------------------------------- */
 
-export function normalizeBrightness(
-    imageData: ImageData,
-    minTargetBrightness = 128,  // Minimum desired average brightness
-    maxAdjustment = 1.5         // Maximum multiplier to avoid over-amplification
-): ImageData {
-    const { data } = imageData;
-
-    // Calculate global average brightness
-    let sum = 0;
-    let count = 0;
-
-    for (let i = 0; i < data.length; i += 4) {
-        sum += data[i]; // Since it's grayscale, R=G=B
-        count++;
-    }
-
-    const avgBrightness = sum / count;
-
-    // If brightness is already above threshold, return unchanged
-    if (avgBrightness >= minTargetBrightness) {
-        return imageData;
-    }
-
-    // Calculate adjustment factor, but cap it to avoid over-amplification
-    const adjustment = Math.min(
-        minTargetBrightness / avgBrightness,
-        maxAdjustment
-    );
-
-    // Apply brightness boost
-    for (let i = 0; i < data.length; i += 4) {
-        const boosted = Math.min(255, Math.round(data[i] * adjustment));
-        data[i] = boosted;
-        data[i + 1] = boosted;
-        data[i + 2] = boosted;
-    }
-
-    return imageData;
-}
+// export function normalizeBrightness(
+//     imageData: ImageData,
+//     minTargetBrightness = 128,  // Minimum desired average brightness
+//     maxAdjustment = 1.5         // Maximum multiplier to avoid over-amplification
+// ): ImageData {
+//     const { data } = imageData;
+//
+//     // Calculate global average brightness
+//     let sum = 0;
+//     let count = 0;
+//
+//     for (let i = 0; i < data.length; i += 4) {
+//         sum += data[i]; // Since it's grayscale, R=G=B
+//         count++;
+//     }
+//
+//     const avgBrightness = sum / count;
+//
+//     // If brightness is already above threshold, return unchanged
+//     if (avgBrightness >= minTargetBrightness) {
+//         return imageData;
+//     }
+//
+//     // Calculate adjustment factor, but cap it to avoid over-amplification
+//     const adjustment = Math.min(
+//         minTargetBrightness / avgBrightness,
+//         maxAdjustment
+//     );
+//
+//     // Apply brightness boost
+//     for (let i = 0; i < data.length; i += 4) {
+//         const boosted = Math.min(255, Math.round(data[i] * adjustment));
+//         data[i] = boosted;
+//         data[i + 1] = boosted;
+//         data[i + 2] = boosted;
+//     }
+//
+//     return imageData;
+// }
 
 /* ----------------------------------------------------------- */
 /* BASIC GRAYSCALE                                              */
@@ -249,7 +249,7 @@ export const preprocessors: { name: string; fn: PreprocessFn }[] = [
     { name: 'none', fn: (img) => img },
 
     { name: 'contrast', fn: (img) =>
-            contrastStretch(normalizeBrightness(toGrayscale(img)))
+            contrastStretch(toGrayscale(img))
     },
 
     { name: 'gamma+contrast', fn: (img) =>
@@ -265,7 +265,7 @@ export const preprocessors: { name: string; fn: PreprocessFn }[] = [
             contrastStretch(
                 sharpen(
                     gamma(
-                        normalizeBrightness(toGrayscale(img)),
+                        toGrayscale(img),
                         0.75
                     )
                 )
@@ -274,7 +274,7 @@ export const preprocessors: { name: string; fn: PreprocessFn }[] = [
 
     { name: 'adaptive-128', fn: (img) =>
             adaptiveLocalContrastAndThreshold(
-                normalizeBrightness(toGrayscale(img)),
+                toGrayscale(img),
                 128,
                 false
             )
@@ -282,7 +282,7 @@ export const preprocessors: { name: string; fn: PreprocessFn }[] = [
 
     { name: 'adaptive-64', fn: (img) =>
             adaptiveLocalContrastAndThreshold(
-                normalizeBrightness(toGrayscale(img)),
+                toGrayscale(img),
                 64,
                 false,
             )
@@ -290,7 +290,7 @@ export const preprocessors: { name: string; fn: PreprocessFn }[] = [
 
     { name: 'adaptive-32', fn: (img) =>
             adaptiveLocalContrastAndThreshold(
-                normalizeBrightness(toGrayscale(img)),
+                toGrayscale(img),
                 32,
                 false
             )
