@@ -278,6 +278,9 @@ function BarcodeScanner() {
                 try {
                     let frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
+                    // Do perpective correction if OpenCV is ready, otherwise just grayscale.
+                    // Perspective correction can help with angled barcodes but is expensive, so we only do it when OpenCV is available and skip it on fallback attempts.
+                    // This naturally means frame is always grayscale when passed to ZXing, which is a nice optimization since ZXing doesn't care about color and it saves us from having to convert back and forth for OpenCV.
                     if (openCvReady) {
                         const corrected = perspectiveCorrect(canvas, openCvReady);
                         if (corrected) {
