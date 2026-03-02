@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "5232925584c19c963c538f110c9885f65f8b412a",
-        "shortHash": "5232925",
-        "message": "Added in new namibia testing",
-        "date": "2026-03-02T13:03:52+02:00"
+        "latestCommit": "67714e25d917ca40ab86de2396a6be943ef43115",
+        "shortHash": "67714e2",
+        "message": "Fixed DOB",
+        "date": "2026-03-02T13:08:20+02:00"
     }
 }
