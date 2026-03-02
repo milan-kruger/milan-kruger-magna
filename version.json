@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "0d9f62e9bc4aa9b71678e894f7cbe74ebec12690",
-        "shortHash": "0d9f62e",
-        "message": "Fixed cvprocessing stage five not using final image",
-        "date": "2026-03-02T02:11:07+02:00"
+        "latestCommit": "f75fc397d1b7d37c542baf6ce4a888c958754f5a",
+        "shortHash": "f75fc39",
+        "message": "Fixed cvprocessing stage to return greyscale",
+        "date": "2026-03-02T02:17:05+02:00"
     }
 }
