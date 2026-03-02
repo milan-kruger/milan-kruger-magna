@@ -1,9 +1,6 @@
 /**
  * Namibia SADC Driver Licence PDF417 Decoder
- * Hybrid ASCII + Packed BCD format
- *
- * DG = 0xD7  (Data Group separator)
- * EL = 0xF7  (Element separator)
+ * Confirmed layout (2026 revision)
  */
 
 const DG = 0xD7;
@@ -26,17 +23,13 @@ function stripControl(s: string): string {
     let result = "";
     for (let i = 0; i < s.length; i++) {
         const code = s.charCodeAt(i);
-
         if (
             (code >= 0x00 && code <= 0x1f) ||
             (code >= 0x7f && code <= 0x9f)
-        ) {
-            continue;
-        }
+        ) continue;
 
         result += s[i];
     }
-
     return result.trim();
 }
 
@@ -51,14 +44,11 @@ function splitBytes(data: Uint8Array, delimiter: number): Uint8Array[] {
         }
     }
 
-    if (start < data.length) {
-        result.push(data.slice(start));
-    }
-
+    if (start < data.length) result.push(data.slice(start));
     return result;
 }
 
-/* ───────────────────────── Packed BCD Decoding ───────────────────────── */
+/* ───────────────────────── BCD Decoding ───────────────────────── */
 
 function decodePackedNumeric(bytes: Uint8Array): string {
     let digits = "";
@@ -76,10 +66,8 @@ function decodePackedNumeric(bytes: Uint8Array): string {
 
 function decodePackedDate(bytes: Uint8Array): string | null {
     const digits = decodePackedNumeric(bytes);
-
     if (digits.length !== 8) return null;
 
-    // Namibia format: YYYYMMDD
     const year = digits.slice(0, 4);
     const month = digits.slice(4, 6);
     const day = digits.slice(6, 8);
@@ -87,13 +75,16 @@ function decodePackedDate(bytes: Uint8Array): string | null {
     return `${day}/${month}/${year}`;
 }
 
-function decodeSex(bytes: Uint8Array): string | null {
-    if (!bytes.length) return null;
+/* ───────────────────────── Gender From ID ───────────────────────── */
 
-    const firstNibble = (bytes[0] >> 4) & 0x0f;
+function deriveGenderFromID(id: string): string | null {
+    const digits = id.replace(/\D/g, "");
+    if (digits.length < 11) return null;
 
-    // Namibia rule: even = Female, odd = Male
-    return firstNibble % 2 === 0 ? "Female" : "Male";
+    const sequence = parseInt(digits.slice(6, 11), 10);
+    if (isNaN(sequence)) return null;
+
+    return sequence < 50000 ? "Female" : "Male";
 }
 
 /* ───────────────────────── Main Decoder ───────────────────────── */
@@ -107,7 +98,6 @@ export function decodeNamibiaLicence(rawText: string): ParsedLicence {
 
     const add = (label: string, value?: string | null) => {
         if (!value) return;
-
         const clean = stripControl(value);
         if (clean && !added.has(label)) {
             added.add(label);
@@ -125,57 +115,56 @@ export function decodeNamibiaLicence(rawText: string): ParsedLicence {
             stripControl(decoder.decode(e))
         );
 
-        /* ───────────── Skip biometric block ───────────── */
+        // Skip biometric block
+        if (elements[0]?.startsWith("FMR")) continue;
 
-        if (elements[0]?.startsWith("FMR")) {
-            continue;
-        }
-
-        /* ───────────── Detect DG1 (Main Identity Block) ───────────── */
-
+        // Detect DG1 block
         if (elements.includes("ROADS AUTHORITY")) {
-
-            // Layout observed:
-            // [0] Surname (ASCII)
-            // [1] Names (ASCII)
-            // [2] Sex (packed BCD)
-            // [3] DOB (packed YYYYMMDD)
-            // [4] Personal Number (packed numeric)
-            // [5] Country
-            // [6] Authority
-            // [7] Licence Code
-            // [8] Categories
 
             add("Surname", elements[0]);
             add("Names", elements[1]);
 
-            const sex = decodeSex(rawElements[2]);
-            if (sex) add("Sex", sex);
-
-            const dob = decodePackedDate(rawElements[3]);
+            const dob = decodePackedDate(rawElements[2]);
             if (dob) add("Date of Birth", dob);
 
-            const personal = decodePackedNumeric(rawElements[4]);
-            if (personal) add("Personal Number", personal);
+            const validFrom = decodePackedDate(rawElements[3]);
+            if (validFrom) add("Valid From", validFrom);
+
+            const validTo = decodePackedDate(rawElements[4]);
+            if (validTo) add("Valid To", validTo);
 
             add("Country", elements[5]);
             add("Issuing Authority", elements[6]);
-            add("License Code", elements[7]);
+            add("Licence Number", elements[7]);
 
-            const categories = elements[8]?.split(";")[0];
-            add("Categories", categories);
+            // Category block
+            const categoryBlock = rawElements[8];
+            const categoryAscii = stripControl(decoder.decode(categoryBlock));
+            const category = categoryAscii.split(";")[0];
+            add("Categories", category);
+
+            // Extract first issue date from packed dates in category block
+            for (let i = 0; i <= categoryBlock.length - 4; i++) {
+                const slice = categoryBlock.slice(i, i + 4);
+                const decoded = decodePackedDate(slice);
+                if (decoded) {
+                    add("First Issue Date", decoded);
+                    break;
+                }
+            }
         }
 
-        /* ───────────── Additional Pattern-Based Extraction ───────────── */
-
+        // Extract ID number and derive gender
         for (const el of elements) {
-
             if (/^\d{2}\/\d{8,}$/.test(el)) {
                 add("ID Number", el);
+
+                const gender = deriveGenderFromID(el);
+                if (gender) add("Sex", gender);
             }
 
-            if (/^[A-Z]{2,3}\/\d+\/\d+\/\d+\/\d+$/.test(el)) {
-                add("License Number", el);
+            if (/^[A-Z]{2,3}\/\d+\/\d+\/\d+\/\d+/.test(el)) {
+                add("Card Serial", el);
             }
         }
     }
