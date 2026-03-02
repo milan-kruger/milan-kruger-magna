@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "f75fc397d1b7d37c542baf6ce4a888c958754f5a",
-        "shortHash": "f75fc39",
-        "message": "Fixed cvprocessing stage to return greyscale",
-        "date": "2026-03-02T02:17:05+02:00"
+        "latestCommit": "c1411924dfd8003d5bf25bcd612cdf9cdeb0181c",
+        "shortHash": "c141192",
+        "message": "Made it assume that preprocessing receives a grayscale image",
+        "date": "2026-03-02T02:18:32+02:00"
     }
 }
