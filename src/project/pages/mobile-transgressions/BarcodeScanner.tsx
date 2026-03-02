@@ -1,6 +1,8 @@
 import CancelIcon from '@mui/icons-material/Cancel';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ErrorIcon from '@mui/icons-material/Error';
 import { BsUpcScan } from 'react-icons/bs';
-import { Box, Stack } from '@mui/material';
+import { Box, Stack, Chip } from '@mui/material';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import TmIconButton from '../../../framework/components/button/TmIconButton';
@@ -11,83 +13,84 @@ import {
     type ParsedField
 } from './dlBarcodeParser';
 import { parseCarDiskBarcode, isCarDiskBarcode } from './carDiskBarcodeParser';
-import {cloneImageData, preprocessors, toGrayscale} from './imagePreprocessing';
+import { cloneImageData, preprocessors, toGrayscale } from './imagePreprocessing';
 import { perspectiveCorrect, OpenCVModule } from './cvProcessing';
 import cv from "@techstark/opencv-js";
+import {
+    preloadPublicKey,
+    verifyBarcodeSignature,
+    type VerificationResult,
+    hasSignature
+} from './signatureVerification';
+
+// Your public key - in production, this should come from environment variables
+const PUBLIC_KEY_PEM = `-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEgqjueRZUadiYv9GcriTFwp6mXsdS
+ItxZYhtj9lNa6ov3cbdsU9puE4eCcar6oLKRrDItA5JxOJy7Ys7zuvfGNA==
+-----END PUBLIC KEY-----`
 
 type BarcodeResult = {
     rawValue: string;
     format: string;
     preprocessor?: string;
     binarizer?: string;
+    verification?: VerificationResult;
 };
 
 type ScannerState =
     | { phase: 'idle'; error?: string }
+    | { phase: 'loading' }
     | { phase: 'scanning' }
     | { phase: 'result'; barcode: BarcodeResult };
 
 // ── zxing-wasm (C++ WASM, same decoder on every platform) ────────────────────
-// Uses the ZXing C++ engine compiled to WebAssembly — dramatically better at
-// dense/complex PDF417 (e.g. driver's licences) than the pure-JS @zxing/library.
 const wasmReaderOptions: ReaderOptions = {
     formats: ['PDF417'],
     tryHarder: true,
     tryRotate: true,
     tryDownscale: true,
-    tryDenoise: true,      // experimental; expensive on mobile CPUs
+    tryDenoise: true,
     maxNumberOfSymbols: 1,
     textMode: 'Plain',
     binarizer: 'LocalAverage',
 };
 
-// Fallback binarizer for when LocalAverage (block-based local threshold) fails.
-// GlobalHistogram uses a single global threshold — can succeed under uniform
-// lighting or overexposure where LocalAverage fails, and vice versa.
 const wasmReaderOptionsFallback: ReaderOptions = {
     ...wasmReaderOptions,
     binarizer: 'GlobalHistogram',
 };
 
-// Define a centered rectangular ROI that covers most of the screen, with different aspect ratios for portrait vs landscape.
-// This helps ZXing focus on the barcode and ignore irrelevant background clutter,
-// improving both performance and accuracy.
+// Define a centered rectangular ROI
 function getROI(width: number, height: number) {
     const isPortrait = height > width;
 
     if (isPortrait) {
-        // For portrait: wider rectangle in the middle horizontally
-        const roiWidth = 0.8;  // 80% of screen width
-        const roiHeight = 0.15; // 15% of screen height
-
+        const roiWidth = 0.8;
+        const roiHeight = 0.15;
         return {
-            x: (1 - roiWidth) / 2,      // Centered horizontally
-            y: (1 - roiHeight) / 2,      // Centered vertically
+            x: (1 - roiWidth) / 2,
+            y: (1 - roiHeight) / 2,
             width: roiWidth,
             height: roiHeight
         };
     }
 
-    // For landscape: wider rectangle in the middle horizontally
-    const roiWidth = 0.7;  // 70% of screen width
-    const roiHeight = 0.4; // 40% of screen height
-
+    const roiWidth = 0.7;
+    const roiHeight = 0.4;
     return {
-        x: (1 - roiWidth) / 2,      // Centered horizontally
-        y: (1 - roiHeight) / 2,      // Centered vertically
+        x: (1 - roiWidth) / 2,
+        y: (1 - roiHeight) / 2,
         width: roiWidth,
         height: roiHeight
     };
 }
 
-// Optionally shrink the ROI slightly to avoid edge artifacts that can interfere with decoding.
 function shrinkROI(
     roi: ReturnType<typeof getROI>,
-    shrinkFactor = 0.1 // 10% smaller
+    shrinkFactor = 0.1
 ) {
     const newWidth = roi.width * (1 - shrinkFactor);
     const newHeight = roi.height * (1 - shrinkFactor);
-
     return {
         x: roi.x + (roi.width - newWidth) / 2,
         y: roi.y + (roi.height - newHeight) / 2,
@@ -103,18 +106,12 @@ type DecodeSuccess = {
     binarizer: 'LocalAverage' | 'GlobalHistogram';
 };
 
-/** Try decoding with primary binarizer, then fallback binarizer. */
 async function tryDecodeSingle(
     originalImageData: ImageData,
     preprocessorIndex: number
 ): Promise<DecodeSuccess | null> {
-
     const { name, fn } = preprocessors[preprocessorIndex];
-
-    // const imageData = toGrayscale(cloneImageData(originalImageData));
-
     const imageData = cloneImageData(originalImageData);
-
 
     try {
         fn(imageData);
@@ -149,18 +146,18 @@ async function tryDecodeSingle(
     return null;
 }
 
-
 // ─────────────────────────────────────────────────────────────────────────────
 
 function BarcodeScanner() {
     const { t } = useTranslation();
 
     const [state, setState] = useState<ScannerState>({ phase: 'idle' });
-
     const [roi, setRoi] = useState<ReturnType<typeof getROI> | null>(null);
+    const [isKeyLoaded, setIsKeyLoaded] = useState(false);
 
     const barcode = state.phase === 'result' ? state.barcode : null;
     const rawValue = barcode?.rawValue;
+
     const parsedBarcode = useMemo(() => {
         if (!rawValue) return null;
         if (isCarDiskBarcode(rawValue)) return parseCarDiskBarcode(rawValue);
@@ -176,6 +173,31 @@ function BarcodeScanner() {
 
     const preprocessorIndexRef = useRef(0);
 
+    // Preload public key on mount
+    useEffect(() => {
+        let mounted = true;
+
+        const loadKey = async () => {
+            try {
+                await preloadPublicKey(PUBLIC_KEY_PEM);
+                if (mounted) {
+                    setIsKeyLoaded(true);
+                }
+            } catch (error) {
+                console.error('Failed to preload public key:', error);
+                // Continue without verification - it will fail gracefully
+                if (mounted) {
+                    setIsKeyLoaded(true);
+                }
+            }
+        };
+
+        loadKey();
+
+        return () => {
+            mounted = false;
+        };
+    }, []);
 
     useEffect(() => {
         const cvModule = cv as OpenCVModule;
@@ -211,7 +233,8 @@ function BarcodeScanner() {
             let stream: MediaStream;
             try {
                 stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: { exact: 'environment' },
+                    video: {
+                        facingMode: { exact: 'environment' },
                         width: { ideal: 2560 },
                         height: { ideal: 1440 }
                     }
@@ -275,33 +298,25 @@ function BarcodeScanner() {
                     canvas.height
                 );
 
-
-                // Decode outside try/catch so state transitions are never silently swallowed.
                 let decoded: DecodeSuccess | null = null;
 
                 try {
                     let frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-                    // Do perspective correction if OpenCV is ready, otherwise just grayscale.
-                    // Perspective correction can help with angled barcodes but is expensive, so we only do it when OpenCV is available and skip it on fallback attempts.
-                    // This naturally means frame is always grayscale when passed to ZXing, which is a nice optimization since ZXing doesn't care about color and it saves us from having to convert back and forth for OpenCV.
                     if (openCvReady) {
                         const corrected = perspectiveCorrect(canvas, openCvReady);
                         if (corrected) {
-                            frame = corrected; // already grayscale
+                            frame = corrected;
                         } else {
                             frame = toGrayscale(frame);
                         }
                     } else {
                         frame = toGrayscale(frame);
                     }
+
                     const idx = preprocessorIndexRef.current;
-
                     decoded = await tryDecodeSingle(frame, idx);
-
-                    // Advance for next frame
-                    preprocessorIndexRef.current =
-                        (preprocessorIndexRef.current + 1) % preprocessors.length;
+                    preprocessorIndexRef.current = (preprocessorIndexRef.current + 1) % preprocessors.length;
 
                 } catch {
                     // no barcode detected this frame
@@ -311,13 +326,27 @@ function BarcodeScanner() {
 
                 if (decoded) {
                     stopStream();
+
+                    // Verify signature if it's a driver's licence and key is loaded
+                    let verification: VerificationResult | undefined;
+                    if (hasSignature(decoded.text) && isKeyLoaded) {
+                        verification = await verifyBarcodeSignature(decoded.text, PUBLIC_KEY_PEM);
+                    } else if (hasSignature(decoded.text) && !isKeyLoaded) {
+                        verification = {
+                            verified: false,
+                            error: 'Public key not loaded',
+                            signaturePresent: true
+                        };
+                    }
+
                     setState({
                         phase: 'result',
                         barcode: {
                             rawValue: decoded.text,
                             format: decoded.format,
                             preprocessor: decoded.preprocessor,
-                            binarizer: decoded.binarizer
+                            binarizer: decoded.binarizer,
+                            verification
                         }
                     });
                     return;
@@ -330,15 +359,53 @@ function BarcodeScanner() {
                     scanTimerRef.current = globalThis.setTimeout(scan, delay);
                 }
             };
+
             scanTimerRef.current = setTimeout(scan, 0);
         } catch {
             setState({ phase: 'idle', error: t('barcodeScanner.cameraError') });
         }
-    }, [t, stopStream, openCvReady]);
+    }, [t, stopStream, openCvReady, isKeyLoaded]);
 
     useEffect(() => {
         return () => stopStream();
     }, [stopStream]);
+
+    // Helper to render verification status
+    const renderVerificationStatus = (verification?: VerificationResult) => {
+        if (!verification) return null;
+
+        if (!verification.signaturePresent) {
+            return (
+                <Chip
+                    icon={<ErrorIcon />}
+                    label="No signature"
+                    color="warning"
+                    size="small"
+                    variant="outlined"
+                />
+            );
+        }
+
+        if (verification.verified) {
+            return (
+                <Chip
+                    icon={<CheckCircleIcon />}
+                    label="Signature Valid"
+                    color="success"
+                    size="small"
+                />
+            );
+        }
+
+        return (
+            <Chip
+                icon={<ErrorIcon />}
+                label={`Invalid Signature${verification.error ? ': ' + verification.error : ''}`}
+                color="error"
+                size="small"
+            />
+        );
+    };
 
     return (
         <Box
@@ -359,9 +426,15 @@ function BarcodeScanner() {
                         size='large'
                         color='primary'
                         onClick={startScanning}
+                        disabled={!isKeyLoaded}
                     >
                         <BsUpcScan size={64} />
                     </TmIconButton>
+                    {!isKeyLoaded && (
+                        <TmTypography testid='barcodeScannerLoadingModule' variant='body2' color='warning'>
+                            Loading security module...
+                        </TmTypography>
+                    )}
                     <TmTypography variant='body1' testid='barcodeScannerScanPrompt' color='textSecondary'>
                         {t('barcodeScanner.tapToScan')}
                     </TmTypography>
@@ -394,7 +467,6 @@ function BarcodeScanner() {
                                 border: '3px solid #00ff88',
                                 borderRadius: 2,
                                 pointerEvents: 'none',
-                                // Visual ROI is a slightly smaller rectangle inside the actual ROI to avoid edge artifacts that can interfere with decoding.
                                 left: `${visualRoi!.x * 100}%`,
                                 top: `${visualRoi!.y * 100}%`,
                                 width: `${visualRoi!.width * 100}%`,
@@ -420,6 +492,14 @@ function BarcodeScanner() {
                     <TmTypography variant='h6' testid='barcodeScannerResultTitle' color='primary'>
                         {t('barcodeScanner.resultTitle')}
                     </TmTypography>
+
+                    {/* Verification Status */}
+                    {barcode?.verification && (
+                        <Box sx={{ mb: 1 }}>
+                            {renderVerificationStatus(barcode.verification)}
+                        </Box>
+                    )}
+
                     <Box
                         p={3}
                         border='1px solid'
@@ -429,18 +509,20 @@ function BarcodeScanner() {
                         maxHeight='60vh'
                         overflow='auto'
                     >
-                        <Stack gap={10}>
+                        <Stack gap={2}>
                             <TmTypography variant='body2' testid='barcodeScannerResultFormat' color='textSecondary'>
-                                {t('barcodeScanner.format')}: {state.barcode.format}
+                                {t('barcodeScanner.format')}: {barcode?.format}
                             </TmTypography>
+
                             <Stack>
                                 <TmTypography variant='body1' testid='barcodeScannerResultTitle' color='textSecondary'>
                                     Raw Value:
                                 </TmTypography>
                                 <TmTypography variant='body1' testid='barcodeScannerResultValue' sx={{ mt: 1, wordBreak: 'break-all' }}>
-                                    {state.barcode.rawValue}
+                                    {barcode?.rawValue}
                                 </TmTypography>
                             </Stack>
+
                             <Stack>
                                 <TmTypography variant='body1' testid='barcodeScannerResultDecodedTitle' color='textSecondary'>
                                     Decoded Value:
@@ -459,21 +541,33 @@ function BarcodeScanner() {
                                     )}
                                 </Stack>
                             </Stack>
+
                             <Stack>
-                                <TmTypography testid='barcodeScannerNoStructuredData' variant='body1' color='textSecondary'>
+                                <TmTypography testid='barcodeScannerLoadingModule' variant='body1' color='textSecondary'>
                                     Debug Info:
                                 </TmTypography>
-
-                                <TmTypography testid='barcodeScannerNoStructuredData' variant='body2' sx={{ mt: 1 }}>
-                                    <strong>Preprocessor:</strong> {state.barcode.preprocessor}
+                                <TmTypography testid='barcodeScannerLoadingModule' variant='body2' sx={{ mt: 1 }}>
+                                    <strong>Preprocessor:</strong> {barcode?.preprocessor}
                                 </TmTypography>
-
-                                <TmTypography testid='barcodeScannerNoStructuredData' variant='body2'>
-                                    <strong>Binarizer:</strong> {state.barcode.binarizer}
+                                <TmTypography testid='barcodeScannerLoadingModule' variant='body2'>
+                                    <strong>Binarizer:</strong> {barcode?.binarizer}
                                 </TmTypography>
+                                {barcode?.verification && (
+                                    <>
+                                        <TmTypography testid='barcodeScannerLoadingModule' variant='body2'>
+                                            <strong>Signature Present:</strong> {barcode.verification.signaturePresent ? 'Yes' : 'No'}
+                                        </TmTypography>
+                                        {barcode.verification.error && (
+                                            <TmTypography testid='barcodeScannerLoadingModule' variant='body2' color='error'>
+                                                <strong>Error:</strong> {barcode.verification.error}
+                                            </TmTypography>
+                                        )}
+                                    </>
+                                )}
                             </Stack>
                         </Stack>
                     </Box>
+
                     <TmIconButton
                         testid='scanAgainButton'
                         size='large'
