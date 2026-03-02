@@ -68,8 +68,14 @@ function decodeCompactNumeric(bytes: Uint8Array): string {
 
 function decodeDOB(bytes: Uint8Array): string | null {
     const digits = decodeCompactNumeric(bytes);
+
     if (digits.length !== 8) return null;
-    return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
+
+    const day = digits.slice(0, 2);
+    const month = digits.slice(2, 4);
+    const year = digits.slice(4, 8);
+
+    return `${day}/${month}/${year}`;
 }
 
 function decodeSex(bytes: Uint8Array): string | null {
