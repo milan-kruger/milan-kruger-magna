@@ -1,12 +1,12 @@
 /**
- * Namibia ISO 18013-2 Driver Licence Decoder
- * Non-TLV implementation (delimiter-based).
+ * Namibia SADC Driver Licence PDF417 Decoder
+ * Delimiter-based (DG = 0xD7, EL = 0xF7)
  *
- * Works with ZXing-wasm Latin-1 output.
+ * Compatible with ZXing-wasm Latin-1 output.
  */
 
-const DG = 0xD7;
-const EL = 0xF7;
+const DG = 0xD7; // Data Group separator
+const EL = 0xF7; // Element separator
 
 export type ParsedField = { label: string; value: string };
 export type ParsedLicence = { parsed: boolean; fields: ParsedField[] };
@@ -26,7 +26,7 @@ function stripControl(s: string): string {
     for (let i = 0; i < s.length; i++) {
         const code = s.charCodeAt(i);
 
-        // Remove C0 (0x00–0x1F) and C1 (0x7F–0x9F) control blocks
+        // Remove C0 + C1 control ranges
         if (
             (code >= 0x00 && code <= 0x1f) ||
             (code >= 0x7f && code <= 0x9f)
@@ -51,37 +51,11 @@ function splitBytes(data: Uint8Array, delimiter: number): Uint8Array[] {
         }
     }
 
-    if (start < data.length) result.push(data.slice(start));
-    return result;
-}
-
-function decodeCompactNumeric(bytes: Uint8Array): string {
-    let result = "";
-    for (const b of bytes) {
-        const high = (b >> 4) & 0x0f;
-        const low = b & 0x0f;
-        if (high <= 9) result += high;
-        if (low <= 9) result += low;
+    if (start < data.length) {
+        result.push(data.slice(start));
     }
+
     return result;
-}
-
-function decodeDOB(bytes: Uint8Array): string | null {
-    const digits = decodeCompactNumeric(bytes);
-
-    if (digits.length !== 8) return null;
-
-    const day = digits.slice(0, 2);
-    const month = digits.slice(2, 4);
-    const year = digits.slice(4, 8);
-
-    return `${day}/${month}/${year}`;
-}
-
-function decodeSex(bytes: Uint8Array): string | null {
-    if (!bytes.length) return null;
-    const firstNibble = (bytes[0] >> 4) & 0x0f;
-    return firstNibble % 2 === 0 ? "Female" : "Male";
 }
 
 /* ───────────────────────── Main Decoder ───────────────────────── */
@@ -93,8 +67,9 @@ export function decodeNamibiaLicence(rawText: string): ParsedLicence {
     const fields: ParsedField[] = [];
     const added = new Set<string>();
 
-    const add = (label: string, value: string | null | undefined) => {
+    const add = (label: string, value?: string | null) => {
         if (!value) return;
+
         const clean = stripControl(value);
         if (clean && !added.has(label)) {
             added.add(label);
@@ -104,8 +79,6 @@ export function decodeNamibiaLicence(rawText: string): ParsedLicence {
 
     const groups = splitBytes(bytes, DG);
 
-    let dg1Found = false;
-
     for (const group of groups) {
         const rawElements = splitBytes(group, EL);
         if (!rawElements.length) continue;
@@ -114,39 +87,57 @@ export function decodeNamibiaLicence(rawText: string): ParsedLicence {
             stripControl(decoder.decode(e))
         );
 
-        /* ───────────── Detect DG1 by authority marker ───────────── */
+        /* ───────────── Skip biometric block ───────────── */
 
-        if (!dg1Found && elements.includes("ROADS AUTHORITY")) {
-            dg1Found = true;
-
-            if (rawElements.length >= 9) {
-                add("Surname", elements[0]);
-                add("Initials", elements[1]);
-
-                add("Sex", decodeSex(rawElements[2]));
-                add("Date of Birth", decodeDOB(rawElements[3]));
-
-                const personal = decodeCompactNumeric(rawElements[4]);
-                if (personal) add("Personal Number", personal);
-
-                add("Country", elements[5]);
-                add("Issuing Authority", elements[6]);
-                add("License Code", elements[7]);
-
-                const categories = elements[8]?.split(";")[0];
-                add("Categories", categories);
-            }
+        if (elements[0]?.startsWith("FMR")) {
+            continue;
         }
 
-        /* ───────────── Detect ID Number ───────────── */
+        /* ───────────── Detect DG1 (Main Identity Block) ───────────── */
+
+        if (elements.includes("ROADS AUTHORITY")) {
+
+            // Expected layout (observed Namibia 2026 card sample):
+            // [0] Surname
+            // [1] Names
+            // [2–4] Binary attributes (ignore)
+            // [5] Country
+            // [6] Issuing Authority
+            // [7] Licence Number
+            // [8] Categories (semicolon separated)
+
+            add("Surname", elements[0]);
+            add("Names", elements[1]);
+            add("Country", elements[5]);
+            add("Issuing Authority", elements[6]);
+            add("License Code", elements[7]);
+
+            const categories = elements[8]?.split(";")[0];
+            add("Categories", categories);
+        }
+
+        /* ───────────── Pattern-based extraction ───────────── */
 
         for (const el of elements) {
+
+            // Date of Birth (DD/MM/YYYY)
+            if (/^\d{2}\/\d{2}\/\d{4}$/.test(el)) {
+                add("Date of Birth", el);
+            }
+
+            // ID Number (Namibia format: 03/00061900613)
             if (/^\d{2}\/\d{8,}$/.test(el)) {
                 add("ID Number", el);
             }
 
+            // Structured Licence Number (e.g. NAM/01/26/0399061/T)
             if (/^[A-Z]{2,3}\/\d+\/\d+\/\d+\/\d+$/.test(el)) {
                 add("License Number", el);
+            }
+
+            // Sex (explicit ASCII form)
+            if (el === "Male" || el === "Female") {
+                add("Sex", el);
             }
         }
     }
