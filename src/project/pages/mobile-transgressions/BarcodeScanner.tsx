@@ -8,7 +8,7 @@ import TmTypography from '../../../framework/components/typography/TmTypography'
 import { readBarcodes, type ReaderOptions } from 'zxing-wasm/reader';
 import { parseDLBarcode } from './dlBarcodeParser';
 import { parseCarDiskBarcode, isCarDiskBarcode } from './carDiskBarcodeParser';
-import {cloneImageData, preprocessors} from './imagePreprocessing';
+import {cloneImageData, preprocessors, toGrayscale} from './imagePreprocessing';
 import { perspectiveCorrect, OpenCVModule } from './cvProcessing';
 import cv from "@techstark/opencv-js";
 
@@ -276,18 +276,21 @@ function BarcodeScanner() {
                 let decoded: DecodeSuccess | null = null;
 
                 try {
+                    let frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-                    // Try normal decode first
                     if (openCvReady) {
                         const corrected = perspectiveCorrect(canvas, openCvReady);
                         if (corrected) {
-
-                            // Round robin through different preprocessing strategies each frame to improve chances of decoding under various conditions (e.g. low light, glare, blur).
-                            const idx = preprocessorIndexRef.current;
-
-                            decoded = await tryDecodeSingle(corrected, idx);
+                            frame = corrected; // already grayscale
+                        } else {
+                            frame = toGrayscale(frame);
                         }
+                    } else {
+                        frame = toGrayscale(frame);
                     }
+                    const idx = preprocessorIndexRef.current;
+
+                    decoded = await tryDecodeSingle(frame, idx);
 
                     // Advance for next frame
                     preprocessorIndexRef.current =
