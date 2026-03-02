@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "c1411924dfd8003d5bf25bcd612cdf9cdeb0181c",
-        "shortHash": "c141192",
-        "message": "Made it assume that preprocessing receives a grayscale image",
-        "date": "2026-03-02T02:18:32+02:00"
+        "latestCommit": "50c5d8846a885e94701f452e8377cb22eee523bb",
+        "shortHash": "50c5d88",
+        "message": "Added comments",
+        "date": "2026-03-02T02:24:19+02:00"
     }
 }
