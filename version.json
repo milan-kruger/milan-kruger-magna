@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "67714e25d917ca40ab86de2396a6be943ef43115",
-        "shortHash": "67714e2",
-        "message": "Fixed DOB",
-        "date": "2026-03-02T13:08:20+02:00"
+        "latestCommit": "10529c845dce16698cd7ef4f2a09f50642bf8c11",
+        "shortHash": "10529c8",
+        "message": "Fixed fields",
+        "date": "2026-03-02T13:15:06+02:00"
     }
 }
