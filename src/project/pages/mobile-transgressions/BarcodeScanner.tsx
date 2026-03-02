@@ -6,7 +6,10 @@ import { useTranslation } from 'react-i18next';
 import TmIconButton from '../../../framework/components/button/TmIconButton';
 import TmTypography from '../../../framework/components/typography/TmTypography';
 import { readBarcodes, type ReaderOptions } from 'zxing-wasm/reader';
-import {decodeNamibiaLicence, type ParsedField} from './dlBarcodeParser';
+import {
+    decodeNamibiaLicenceForUI as decodeNamibiaLicence,
+    type ParsedField
+} from './dlBarcodeParser';
 import { parseCarDiskBarcode, isCarDiskBarcode } from './carDiskBarcodeParser';
 import {cloneImageData, preprocessors, toGrayscale} from './imagePreprocessing';
 import { perspectiveCorrect, OpenCVModule } from './cvProcessing';
@@ -145,6 +148,7 @@ async function tryDecodeSingle(
 
     return null;
 }
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 
