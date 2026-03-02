@@ -1,12 +1,13 @@
 /**
  * Namibia SADC Driver Licence PDF417 Decoder
- * Delimiter-based (DG = 0xD7, EL = 0xF7)
+ * Hybrid ASCII + Packed BCD format
  *
- * Compatible with ZXing-wasm Latin-1 output.
+ * DG = 0xD7  (Data Group separator)
+ * EL = 0xF7  (Element separator)
  */
 
-const DG = 0xD7; // Data Group separator
-const EL = 0xF7; // Element separator
+const DG = 0xD7;
+const EL = 0xF7;
 
 export type ParsedField = { label: string; value: string };
 export type ParsedLicence = { parsed: boolean; fields: ParsedField[] };
@@ -26,7 +27,6 @@ function stripControl(s: string): string {
     for (let i = 0; i < s.length; i++) {
         const code = s.charCodeAt(i);
 
-        // Remove C0 + C1 control ranges
         if (
             (code >= 0x00 && code <= 0x1f) ||
             (code >= 0x7f && code <= 0x9f)
@@ -56,6 +56,44 @@ function splitBytes(data: Uint8Array, delimiter: number): Uint8Array[] {
     }
 
     return result;
+}
+
+/* ───────────────────────── Packed BCD Decoding ───────────────────────── */
+
+function decodePackedNumeric(bytes: Uint8Array): string {
+    let digits = "";
+
+    for (const b of bytes) {
+        const high = (b >> 4) & 0x0f;
+        const low = b & 0x0f;
+
+        if (high <= 9) digits += high;
+        if (low <= 9) digits += low;
+    }
+
+    return digits;
+}
+
+function decodePackedDate(bytes: Uint8Array): string | null {
+    const digits = decodePackedNumeric(bytes);
+
+    if (digits.length !== 8) return null;
+
+    // Namibia format: YYYYMMDD
+    const year = digits.slice(0, 4);
+    const month = digits.slice(4, 6);
+    const day = digits.slice(6, 8);
+
+    return `${day}/${month}/${year}`;
+}
+
+function decodeSex(bytes: Uint8Array): string | null {
+    if (!bytes.length) return null;
+
+    const firstNibble = (bytes[0] >> 4) & 0x0f;
+
+    // Namibia rule: even = Female, odd = Male
+    return firstNibble % 2 === 0 ? "Female" : "Male";
 }
 
 /* ───────────────────────── Main Decoder ───────────────────────── */
@@ -97,17 +135,29 @@ export function decodeNamibiaLicence(rawText: string): ParsedLicence {
 
         if (elements.includes("ROADS AUTHORITY")) {
 
-            // Expected layout (observed Namibia 2026 card sample):
-            // [0] Surname
-            // [1] Names
-            // [2–4] Binary attributes (ignore)
+            // Layout observed:
+            // [0] Surname (ASCII)
+            // [1] Names (ASCII)
+            // [2] Sex (packed BCD)
+            // [3] DOB (packed YYYYMMDD)
+            // [4] Personal Number (packed numeric)
             // [5] Country
-            // [6] Issuing Authority
-            // [7] Licence Number
-            // [8] Categories (semicolon separated)
+            // [6] Authority
+            // [7] Licence Code
+            // [8] Categories
 
             add("Surname", elements[0]);
             add("Names", elements[1]);
+
+            const sex = decodeSex(rawElements[2]);
+            if (sex) add("Sex", sex);
+
+            const dob = decodePackedDate(rawElements[3]);
+            if (dob) add("Date of Birth", dob);
+
+            const personal = decodePackedNumeric(rawElements[4]);
+            if (personal) add("Personal Number", personal);
+
             add("Country", elements[5]);
             add("Issuing Authority", elements[6]);
             add("License Code", elements[7]);
@@ -116,28 +166,16 @@ export function decodeNamibiaLicence(rawText: string): ParsedLicence {
             add("Categories", categories);
         }
 
-        /* ───────────── Pattern-based extraction ───────────── */
+        /* ───────────── Additional Pattern-Based Extraction ───────────── */
 
         for (const el of elements) {
 
-            // Date of Birth (DD/MM/YYYY)
-            if (/^\d{2}\/\d{2}\/\d{4}$/.test(el)) {
-                add("Date of Birth", el);
-            }
-
-            // ID Number (Namibia format: 03/00061900613)
             if (/^\d{2}\/\d{8,}$/.test(el)) {
                 add("ID Number", el);
             }
 
-            // Structured Licence Number (e.g. NAM/01/26/0399061/T)
             if (/^[A-Z]{2,3}\/\d+\/\d+\/\d+\/\d+$/.test(el)) {
                 add("License Number", el);
-            }
-
-            // Sex (explicit ASCII form)
-            if (el === "Male" || el === "Female") {
-                add("Sex", el);
             }
         }
     }
