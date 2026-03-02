@@ -305,37 +305,11 @@ export function perspectiveCorrect(
         const warpedGray = new cv.Mat();
         cv.cvtColor(warped, warpedGray, cv.COLOR_RGBA2GRAY);
 
-        // Apply CLAHE (Contrast Limited Adaptive Histogram Equalization)
-        const clahe = new cv.CLAHE(2.0, new cv.Size(8, 8));
-        const claheResult = new cv.Mat();
-        clahe.apply(warpedGray, claheResult);
-
-        // Apply sharpening
-        const sharpKernel = cv.matFromArray(3, 3, cv.CV_32F, [
-            0, -1, 0,
-            -1, 5, -1,
-            0, -1, 0
-        ]);
-        const sharpened = new cv.Mat();
-        cv.filter2D(claheResult, sharpened, cv.CV_8U, sharpKernel);
-
-        // Apply adaptive threshold for maximum contrast
-        const final = new cv.Mat();
-        cv.adaptiveThreshold(
-            sharpened,
-            final,
-            255,
-            cv.ADAPTIVE_THRESH_GAUSSIAN_C,
-            cv.THRESH_BINARY,
-            15,
-            5
-        );
-
         // Convert warped Mat directly to ImageData
         const imgData = new ImageData(
-            new Uint8ClampedArray(final.data),
-            final.cols,
-            final.rows
+            new Uint8ClampedArray(warped.data),
+            warped.cols,
+            warped.rows
         );
 
         // Clean up transform matrices
