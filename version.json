@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "60c80bb206c4efc678a7d7b9ac8d4ff030d0e6b9",
-        "shortHash": "60c80bb",
-        "message": "Fixed frame timing race condition",
-        "date": "2026-03-02T01:58:04+02:00"
+        "latestCommit": "0d9f62e9bc4aa9b71678e894f7cbe74ebec12690",
+        "shortHash": "0d9f62e",
+        "message": "Fixed cvprocessing stage five not using final image",
+        "date": "2026-03-02T02:11:07+02:00"
     }
 }
