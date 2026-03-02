@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import TmIconButton from '../../../framework/components/button/TmIconButton';
 import TmTypography from '../../../framework/components/typography/TmTypography';
 import { readBarcodes, type ReaderOptions } from 'zxing-wasm/reader';
-import { parseDLBarcode } from './dlBarcodeParser';
+import {decodeNamibiaLicence, type ParsedField} from './dlBarcodeParser';
 import { parseCarDiskBarcode, isCarDiskBarcode } from './carDiskBarcodeParser';
 import {cloneImageData, preprocessors, toGrayscale} from './imagePreprocessing';
 import { perspectiveCorrect, OpenCVModule } from './cvProcessing';
@@ -160,7 +160,7 @@ function BarcodeScanner() {
     const parsedBarcode = useMemo(() => {
         if (!rawValue) return null;
         if (isCarDiskBarcode(rawValue)) return parseCarDiskBarcode(rawValue);
-        return parseDLBarcode(rawValue);
+        return decodeNamibiaLicence(rawValue);
     }, [rawValue]);
 
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -443,7 +443,7 @@ function BarcodeScanner() {
                                 </TmTypography>
                                 <Stack sx={{ mt: 1 }} gap={0.5} data-testid='barcodeScannerResultDecodedValue'>
                                     {parsedBarcode?.parsed ? (
-                                        parsedBarcode.fields.map(f => (
+                                        parsedBarcode.fields.map((f: ParsedField) => (
                                             <TmTypography key={f.label} testid={`barcodeScannerField-${f.label}`} variant='body2'>
                                                 <strong>{f.label}:</strong> {f.value}
                                             </TmTypography>
