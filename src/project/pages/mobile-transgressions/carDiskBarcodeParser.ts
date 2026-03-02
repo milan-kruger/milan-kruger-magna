@@ -21,7 +21,7 @@
  *   [13] Expiry date (YYYY-MM-DD)
  */
 
-import type { ParsedField, ParsedDLBarcode } from './dlBarcodeParser';
+import type { ParsedField, ParsedLicence } from './dlBarcodeParser';
 
 /** Detect whether a raw barcode string looks like a Namibian car disk barcode. */
 export function isCarDiskBarcode(rawValue: string): boolean {
@@ -39,7 +39,7 @@ export function isCarDiskBarcode(rawValue: string): boolean {
  *
  * Returns the same shape as `parseDLBarcode` so they can be used interchangeably.
  */
-export function parseCarDiskBarcode(rawValue: string): ParsedDLBarcode {
+export function parseCarDiskBarcode(rawValue: string): ParsedLicence {
     if (!isCarDiskBarcode(rawValue)) {
         return { parsed: false, fields: [] };
     }
