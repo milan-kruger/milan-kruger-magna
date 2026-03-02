@@ -8,7 +8,7 @@ import TmTypography from '../../../framework/components/typography/TmTypography'
 import { readBarcodes, type ReaderOptions } from 'zxing-wasm/reader';
 import { parseDLBarcode } from './dlBarcodeParser';
 import { parseCarDiskBarcode, isCarDiskBarcode } from './carDiskBarcodeParser';
-import {cloneImageData, preprocessors, toGrayscale} from './imagePreprocessing';
+import {cloneImageData, preprocessors} from './imagePreprocessing';
 import { perspectiveCorrect, OpenCVModule } from './cvProcessing';
 import cv from "@techstark/opencv-js";
 
@@ -108,7 +108,10 @@ async function tryDecodeSingle(
 
     const { name, fn } = preprocessors[preprocessorIndex];
 
-    const imageData = toGrayscale(cloneImageData(originalImageData));
+    // const imageData = toGrayscale(cloneImageData(originalImageData));
+
+    const imageData = cloneImageData(originalImageData);
+
 
     try {
         fn(imageData);
