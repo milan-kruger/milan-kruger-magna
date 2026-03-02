@@ -333,9 +333,9 @@ export function perspectiveCorrect(
 
         // Convert warped Mat directly to ImageData
         const imgData = new ImageData(
-            new Uint8ClampedArray(warped.data),
-            warped.cols,
-            warped.rows
+            new Uint8ClampedArray(final.data),
+            final.cols,
+            final.rows
         );
 
         // Clean up transform matrices
