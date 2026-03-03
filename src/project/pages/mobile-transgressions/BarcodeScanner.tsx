@@ -11,7 +11,7 @@ import {
     type ParsedField
 } from './dlBarcodeParser';
 import { parseCarDiskBarcode, isCarDiskBarcode } from './carDiskBarcodeParser';
-import {cloneImageData, preprocessors, toGrayscale} from './imagePreprocessing';
+import {cloneImageData, preprocessors} from './imagePreprocessing';
 import { perspectiveCorrect, OpenCVModule } from './cvProcessing';
 import cv from "@techstark/opencv-js";
 
@@ -32,10 +32,10 @@ type ScannerState =
 // dense/complex PDF417 (e.g. driver's licences) than the pure-JS @zxing/library.
 const wasmReaderOptions: ReaderOptions = {
     formats: ['PDF417'],
-    tryHarder: true,
-    tryRotate: true,
-    tryDownscale: true,
-    tryDenoise: true,      // experimental; expensive on mobile CPUs
+    tryHarder: false,
+    tryRotate: false,
+    tryDownscale: false,
+    tryDenoise: false,      // experimental; expensive on mobile CPUs
     maxNumberOfSymbols: 1,
     textMode: 'Plain',
     binarizer: 'LocalAverage',
@@ -111,10 +111,7 @@ async function tryDecodeSingle(
 
     const { name, fn } = preprocessors[preprocessorIndex];
 
-    // const imageData = toGrayscale(cloneImageData(originalImageData));
-
     const imageData = cloneImageData(originalImageData);
-
 
     try {
         fn(imageData);
@@ -122,8 +119,13 @@ async function tryDecodeSingle(
         return null;
     }
 
+    const t0 = performance.now();
+
+    console.log(imageData.width , imageData.height);
     let results = await readBarcodes(imageData, wasmReaderOptions);
 
+    const t1 = performance.now();
+    console.log(`Time to decode: ${(t1 - t0).toFixed(2)}ms, Preprocessor: ${name}, Binarizer: ${wasmReaderOptions.binarizer}, Results: ${results.length}`);
     if (results.length > 0 && results[0].isValid && results[0].text) {
         return {
             text: results[0].text,
@@ -148,7 +150,6 @@ async function tryDecodeSingle(
 
     return null;
 }
-
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -289,11 +290,7 @@ function BarcodeScanner() {
                         const corrected = perspectiveCorrect(canvas, openCvReady);
                         if (corrected) {
                             frame = corrected; // already grayscale
-                        } else {
-                            frame = toGrayscale(frame);
                         }
-                    } else {
-                        frame = toGrayscale(frame);
                     }
                     const idx = preprocessorIndexRef.current;
 

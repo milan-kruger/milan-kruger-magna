@@ -305,12 +305,20 @@ export function perspectiveCorrect(
         const warpedGray = new cv.Mat();
         cv.cvtColor(warped, warpedGray, cv.COLOR_RGBA2GRAY);
 
-        // Convert warped Mat directly to ImageData
+        const warpedRGBA = new cv.Mat();
+        cv.cvtColor(warpedGray, warpedRGBA, cv.COLOR_GRAY2RGBA);
+
+        const pixelData = new Uint8ClampedArray(warpedRGBA.data.length);
+        pixelData.set(warpedRGBA.data);
+
         const imgData = new ImageData(
-            new Uint8ClampedArray(warpedGray.data),
-            warpedGray.cols,
-            warpedGray.rows
+            pixelData,
+            warpedRGBA.cols,
+            warpedRGBA.rows
         );
+
+        warpedGray.delete();
+        warpedRGBA.delete();
 
         // Clean up transform matrices
         srcTri.delete();
