@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "a7f30a2c4072babf9eccd05d4832408555b2607f",
-        "shortHash": "a7f30a2",
+        "latestCommit": "7fed96e995fb18a350c534e313dffe153e97b7cb",
+        "shortHash": "7fed96e",
         "message": "Fixed stuff",
-        "date": "2026-03-03T11:42:05+02:00"
+        "date": "2026-03-03T11:46:22+02:00"
     }
 }
