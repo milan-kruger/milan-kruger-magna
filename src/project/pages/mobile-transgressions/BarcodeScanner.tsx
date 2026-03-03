@@ -44,10 +44,10 @@ const wasmReaderOptions: ReaderOptions = {
 // Fallback binarizer for when LocalAverage (block-based local threshold) fails.
 // GlobalHistogram uses a single global threshold — can succeed under uniform
 // lighting or overexposure where LocalAverage fails, and vice versa.
-const wasmReaderOptionsFallback: ReaderOptions = {
-    ...wasmReaderOptions,
-    binarizer: 'GlobalHistogram',
-};
+// const wasmReaderOptionsFallback: ReaderOptions = {
+//     ...wasmReaderOptions,
+//     binarizer: 'GlobalHistogram',
+// };
 
 // Define a centered rectangular ROI that covers most of the screen, with different aspect ratios for portrait vs landscape.
 // This helps ZXing focus on the barcode and ignore irrelevant background clutter,
@@ -122,7 +122,7 @@ async function tryDecodeSingle(
         return null;
     }
 
-    let results = await readBarcodes(imageData, wasmReaderOptions);
+    const results = await readBarcodes(imageData, wasmReaderOptions);
 
     if (results.length > 0 && results[0].isValid && results[0].text) {
         return {
@@ -133,18 +133,18 @@ async function tryDecodeSingle(
         };
     }
 
-    if (name === 'none' || name === 'contrast') {
-        results = await readBarcodes(imageData, wasmReaderOptionsFallback);
-
-        if (results.length > 0 && results[0].isValid && results[0].text) {
-            return {
-                text: results[0].text,
-                format: results[0].format,
-                preprocessor: name,
-                binarizer: 'GlobalHistogram'
-            };
-        }
-    }
+    // if (name === 'none' || name === 'contrast') {
+    //     results = await readBarcodes(imageData, wasmReaderOptionsFallback);
+    //
+    //     if (results.length > 0 && results[0].isValid && results[0].text) {
+    //         return {
+    //             text: results[0].text,
+    //             format: results[0].format,
+    //             preprocessor: name,
+    //             binarizer: 'GlobalHistogram'
+    //         };
+    //     }
+    // }
 
     return null;
 }
@@ -233,7 +233,7 @@ function BarcodeScanner() {
 
             preprocessorIndexRef.current = 0;
 
-            const TARGET_FPS = 6;
+            const TARGET_FPS = 8;
             const FRAME_INTERVAL = 1000 / TARGET_FPS;
 
             const scan = async () => {
