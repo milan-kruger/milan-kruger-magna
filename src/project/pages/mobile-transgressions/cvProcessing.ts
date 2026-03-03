@@ -77,6 +77,9 @@ export function perspectiveCorrect(
     const contours = new cv.MatVector();
     const hierarchy = new cv.Mat();
 
+    // Declare variables that need to be accessible in cleanup
+    let maxContour: cv.Mat | null = null;
+
     try {
         // -------- Stage 1: Aggressive preprocessing --------
         cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
@@ -108,39 +111,140 @@ export function perspectiveCorrect(
         }
 
         // -------- Stage 2: Aggressive contour finding --------
-        // Find largest contour above threshold
-        let largestContour: cv.Mat | null = null;
         let maxArea = 0;
+        let maxPerimeter = 0;
+        const imageArea = src.rows * src.cols;
+        const minArea = imageArea * 0.05; // Reduced to 5% to catch smaller regions
 
         for (let i = 0; i < contours.size(); i++) {
             const cnt = contours.get(i);
             const area = cv.contourArea(cnt);
+            const perimeter = cv.arcLength(cnt, true);
 
-            if (area > maxArea) {
-                maxArea = area;
-                if (largestContour) largestContour.delete();
-                largestContour = cnt.clone();
+            if (area < minArea) continue;
+
+            // Approximate contour to polygon with varying precision
+            for (let epsilon = 0.01; epsilon <= 0.05; epsilon += 0.01) {
+                const approx = new cv.Mat();
+                cv.approxPolyDP(cnt, approx, epsilon * perimeter, true);
+
+                // Check if it's a quadrilateral (4 corners) or try to find one with 4-6 corners
+                if ((approx.rows === 4 || approx.rows === 5 || approx.rows === 6) &&
+                    area > maxArea &&
+                    perimeter > maxPerimeter) {
+
+                    maxArea = area;
+                    maxPerimeter = perimeter;
+                    if (maxContour) maxContour.delete();
+                    maxContour = approx.clone();
+                    break; // Found a good approximation
+                }
+
+                approx.delete();
             }
         }
 
-        if (!largestContour) {
+        // If no quadrilateral found, try a different approach
+        if (!maxContour) {
+            // Find the largest contour and try to fit a rectangle
+            let largestContour: cv.Mat | null = null;
+            maxArea = 0;
+
+            for (let i = 0; i < contours.size(); i++) {
+                const cnt = contours.get(i);
+                const area = cv.contourArea(cnt);
+                if (area > maxArea) {
+                    maxArea = area;
+                    if (largestContour) largestContour.delete();
+                    largestContour = cnt.clone();
+                }
+            }
+
+            if (largestContour) {
+                // Get the minimum area rectangle
+                const rect = cv.minAreaRect(largestContour);
+                // boxPoints returns an array of Point, not a Mat
+                const boxPoints = cv.boxPoints(rect);
+
+                // Convert the box points array to a Mat
+                const boxMat = cv.matFromArray(4, 1, cv.CV_32FC2, [
+                    boxPoints[0].x, boxPoints[0].y,
+                    boxPoints[1].x, boxPoints[1].y,
+                    boxPoints[2].x, boxPoints[2].y,
+                    boxPoints[3].x, boxPoints[3].y
+                ]);
+
+                maxContour = boxMat;
+                largestContour.delete();
+            }
+        }
+
+        if (!maxContour) {
+            console.error('No contour found for perspective correction');
             cleanup();
             return null;
         }
 
-// Always use minAreaRect
-        const rect = cv.minAreaRect(largestContour);
-        const box = cv.boxPoints(rect); // Always 4 points
+        // -------- Stage 3: Extract and order the corner points --------
+        const points: { x: number; y: number }[] = [];
 
-        largestContour.delete();
+        // Check the type of matrix and extract points accordingly
+        if (maxContour.type() === cv.CV_32FC2 || maxContour.type() === cv.CV_32F) {
+            for (let i = 0; i < maxContour.rows; i++) {
+                const ptr = maxContour.floatPtr(i, 0);
+                if (ptr && ptr.length >= 2) {
+                    points.push({
+                        x: Math.round(ptr[0]),
+                        y: Math.round(ptr[1])
+                    });
+                }
+            }
+        } else {
+            for (let i = 0; i < maxContour.rows; i++) {
+                const ptr = maxContour.intPtr(i, 0);
+                if (ptr && ptr.length >= 2) {
+                    points.push({
+                        x: ptr[0],
+                        y: ptr[1]
+                    });
+                }
+            }
+        }
 
-// Convert to JS points
-        const ordered = orderPoints([
-            { x: box[0].x, y: box[0].y },
-            { x: box[1].x, y: box[1].y },
-            { x: box[2].x, y: box[2].y },
-            { x: box[3].x, y: box[3].y },
-        ]);
+        if (points.length < 4) {
+            console.error('Not enough points extracted:', points.length);
+            cleanup();
+            return null;
+        }
+
+        // If we have more than 4 points, reduce to 4 corners
+        if (points.length > 4) {
+            // Find convex hull
+            const pointsMat = cv.matFromArray(points.length, 1, cv.CV_32SC2,
+                points.flatMap(p => [p.x, p.y]));
+            const hull = new cv.Mat();
+            cv.convexHull(pointsMat, hull, false, true);
+
+            points.length = 0;
+            for (let i = 0; i < hull.rows; i++) {
+                const ptr = hull.intPtr(i, 0);
+                if (ptr && ptr.length >= 2) {
+                    points.push({ x: ptr[0], y: ptr[1] });
+                }
+            }
+            hull.delete();
+            pointsMat.delete();
+        }
+
+        // Ensure we have exactly 4 points
+        if (points.length !== 4) {
+            console.error('Invalid number of points after processing:', points.length);
+            cleanup();
+            return null;
+        }
+
+        // Order points
+        const ordered = orderPoints(points);
 
         // Validate ordered points
         if (!ordered || ordered.length !== 4) {
@@ -162,19 +266,11 @@ export function perspectiveCorrect(
         // Increase width by 20% for better detail
         const targetWidth = Math.round(maxWidth * 1.2);
 
-
         const height1 = distance(ordered[0], ordered[3]);
         const height2 = distance(ordered[1], ordered[2]);
         const maxHeight = Math.max(Math.round(height1), Math.round(height2));
         // Maintain aspect ratio
         const targetHeight = Math.round((maxHeight / maxWidth) * targetWidth);
-
-        const MAX_WARP_WIDTH = 420;
-        const finalWidth = Math.min(targetWidth, MAX_WARP_WIDTH);
-        const scale = finalWidth / targetWidth;
-        const finalHeight = Math.round(targetHeight * scale);
-
-        new cv.Size(finalWidth, finalHeight)
 
         // -------- Stage 4: Apply perspective transform --------
         const srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
@@ -186,9 +282,9 @@ export function perspectiveCorrect(
 
         const dstTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
             0, 0,
-            finalWidth - 1, 0,
-            finalWidth - 1, finalHeight - 1,
-            0, finalHeight - 1
+            targetWidth - 1, 0,
+            targetWidth - 1, targetHeight - 1,
+            0, targetHeight - 1
         ]);
 
         const M = cv.getPerspectiveTransform(srcTri, dstTri);
@@ -243,5 +339,10 @@ export function perspectiveCorrect(
             if (cnt && !cnt.isDeleted()) cnt.delete();
         }
         contours.delete();
+
+        // Delete maxContour if it exists
+        if (maxContour && !maxContour.isDeleted()) {
+            maxContour.delete();
+        }
     }
 }
