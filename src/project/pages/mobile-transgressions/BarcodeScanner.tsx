@@ -173,7 +173,7 @@ function BarcodeScanner() {
     const scanTimerRef = useRef<number>(0);
 
     const [openCvReady, setOpenCvReady] = useState(false);
-    const visualRoi = roi ? shrinkROI(roi, 0.1) : null;
+    const visualRoi = roi ? shrinkROI(roi, 0.05) : null;
 
     const preprocessorIndexRef = useRef(0);
 
