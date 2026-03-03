@@ -213,8 +213,8 @@ function BarcodeScanner() {
             try {
                 stream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: { exact: 'environment' },
-                        width: { ideal: 2560 },
-                        height: { ideal: 1440 }
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
                     }
                 });
             } catch {
@@ -230,7 +230,7 @@ function BarcodeScanner() {
 
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
-            const MAX_DECODE_WIDTH = 2048;
+            const MAX_DECODE_WIDTH = 800;
 
             preprocessorIndexRef.current = 0;
 
