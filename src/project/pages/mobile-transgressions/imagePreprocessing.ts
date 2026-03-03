@@ -263,9 +263,9 @@ export const preprocessors: { name: string; fn: PreprocessFn }[] = [
             )
     },
 
-    // { name: 'contrast', fn: (img) =>
-    //         contrastStretch(img)
-    // },
+    { name: 'contrast', fn: (img) =>
+            contrastStretch(img)
+    },
 
     { name: 'none', fn: (img) => img },
 
@@ -276,13 +276,13 @@ export const preprocessors: { name: string; fn: PreprocessFn }[] = [
     //         )
     // },
 
-    { name: 'adaptive-128', fn: (img) =>
-            adaptiveLocalContrastAndThreshold(
-                img,
-                128,
-                false
-            )
-    },
+    // { name: 'adaptive-128', fn: (img) =>
+    //         adaptiveLocalContrastAndThreshold(
+    //             img,
+    //             128,
+    //             false
+    //         )
+    // },
 
     { name: 'adaptive-64', fn: (img) =>
             adaptiveLocalContrastAndThreshold(
