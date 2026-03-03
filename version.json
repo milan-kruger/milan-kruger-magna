@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "c74e0833aece60721db575b5268ed4995529c840",
-        "shortHash": "c74e083",
-        "message": "Added in verification",
-        "date": "2026-03-02T16:15:04+02:00"
+        "latestCommit": "3a8e09acd1cae7fca67db017ab01aeb6610eabe9",
+        "shortHash": "3a8e09a",
+        "message": "Revert \"Added in verification\"",
+        "date": "2026-03-03T09:46:30+02:00"
     }
 }
