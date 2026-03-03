@@ -135,7 +135,7 @@ async function tryDecodeSingle(
             text: results[0].text,
             format: results[0].format,
             preprocessor: name,
-            binarizer: 'GlobalHistogram'
+            binarizer: 'LocalAverage'
         };
     }
 

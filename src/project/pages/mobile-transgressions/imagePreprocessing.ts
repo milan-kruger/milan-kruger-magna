@@ -270,19 +270,19 @@ export const preprocessors: { name: string; fn: PreprocessFn }[] = [
     { name: 'none', fn: (img) => img },
 
 
-    // { name: 'gamma+contrast', fn: (img) =>
-    //         contrastStretch(
-    //             gamma(img)
-    //         )
-    // },
+    { name: 'gamma+contrast', fn: (img) =>
+            contrastStretch(
+                gamma(img)
+            )
+    },
 
-    // { name: 'adaptive-128', fn: (img) =>
-    //         adaptiveLocalContrastAndThreshold(
-    //             img,
-    //             128,
-    //             false
-    //         )
-    // },
+    { name: 'adaptive-128', fn: (img) =>
+            adaptiveLocalContrastAndThreshold(
+                img,
+                128,
+                false
+            )
+    },
 
     { name: 'adaptive-64', fn: (img) =>
             adaptiveLocalContrastAndThreshold(
@@ -292,13 +292,13 @@ export const preprocessors: { name: string; fn: PreprocessFn }[] = [
             )
     },
 
-    // { name: 'adaptive-32', fn: (img) =>
-    //         adaptiveLocalContrastAndThreshold(
-    //             img,
-    //             32,
-    //             false
-    //         )
-    // },
+    { name: 'adaptive-32', fn: (img) =>
+            adaptiveLocalContrastAndThreshold(
+                img,
+                32,
+                false
+            )
+    },
 ];
 
 
