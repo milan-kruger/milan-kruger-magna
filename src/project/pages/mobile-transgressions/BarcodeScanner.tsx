@@ -38,7 +38,7 @@ const wasmReaderOptions: ReaderOptions = {
     tryDenoise: false,      // experimental; expensive on mobile CPUs
     maxNumberOfSymbols: 1,
     textMode: 'Plain',
-    binarizer: 'GlobalHistogram',
+    binarizer: 'LocalAverage',
 };
 
 // Fallback binarizer for when LocalAverage (block-based local threshold) fails.
@@ -241,7 +241,7 @@ function BarcodeScanner() {
 
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
-            const MAX_DECODE_WIDTH = 800;
+            const MAX_DECODE_WIDTH = 1200;
 
             preprocessorIndexRef.current = 0;
 
