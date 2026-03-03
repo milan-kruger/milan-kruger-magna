@@ -208,18 +208,24 @@ function BarcodeScanner() {
 
         if (!videoRef.current) return;
 
+        const videoConstraints: MediaTrackConstraints = {
+            width: { ideal: 2560 },
+            height: { ideal: 1440 },
+            // @ts-expect-error — not in all TS lib typings yet, silently ignored if unsupported
+            focusMode: { ideal: 'continuous' },
+            exposureMode: { ideal: 'continuous' },
+            whiteBalanceMode: { ideal: 'continuous' },
+        };
+
         try {
             let stream: MediaStream;
             try {
                 stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: { exact: 'environment' },
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
-                    }
+                    video: { ...videoConstraints, facingMode: { exact: 'environment' } }
                 });
             } catch {
                 stream = await navigator.mediaDevices.getUserMedia({
-                    video: { width: { ideal: 1920 }, height: { ideal: 1080 } }
+                    video: videoConstraints
                 });
             }
 
