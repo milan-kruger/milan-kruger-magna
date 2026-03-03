@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import TmIconButton from '../../../framework/components/button/TmIconButton';
 import TmTypography from '../../../framework/components/typography/TmTypography';
-import { readBarcodes, type ReaderOptions , prepareZXingModule } from 'zxing-wasm/reader';
+import { readBarcodes, type ReaderOptions } from 'zxing-wasm/reader';
 import {
     decodeNamibiaLicenceForUI as decodeNamibiaLicence,
     type ParsedField
@@ -32,10 +32,10 @@ type ScannerState =
 // dense/complex PDF417 (e.g. driver's licences) than the pure-JS @zxing/library.
 const wasmReaderOptions: ReaderOptions = {
     formats: ['PDF417'],
-    tryHarder: false,
-    tryRotate: false,
-    tryDownscale: false,
-    tryDenoise: false,      // experimental; expensive on mobile CPUs
+    tryHarder: true,
+    tryRotate: true,
+    tryDownscale: true,
+    tryDenoise: true,      // experimental; expensive on mobile CPUs
     maxNumberOfSymbols: 1,
     textMode: 'Plain',
     binarizer: 'LocalAverage',
@@ -44,10 +44,10 @@ const wasmReaderOptions: ReaderOptions = {
 // Fallback binarizer for when LocalAverage (block-based local threshold) fails.
 // GlobalHistogram uses a single global threshold — can succeed under uniform
 // lighting or overexposure where LocalAverage fails, and vice versa.
-// const wasmReaderOptionsFallback: ReaderOptions = {
-//     ...wasmReaderOptions,
-//     binarizer: 'GlobalHistogram',
-// };
+const wasmReaderOptionsFallback: ReaderOptions = {
+    ...wasmReaderOptions,
+    binarizer: 'GlobalHistogram',
+};
 
 // Define a centered rectangular ROI that covers most of the screen, with different aspect ratios for portrait vs landscape.
 // This helps ZXing focus on the barcode and ignore irrelevant background clutter,
@@ -57,8 +57,8 @@ function getROI(width: number, height: number) {
 
     if (isPortrait) {
         // For portrait: wider rectangle in the middle horizontally
-        const roiWidth = 0.9;  // 90% of screen width
-        const roiHeight = 0.2; // 20% of screen height
+        const roiWidth = 0.8;  // 80% of screen width
+        const roiHeight = 0.15; // 15% of screen height
 
         return {
             x: (1 - roiWidth) / 2,      // Centered horizontally
@@ -116,19 +116,13 @@ async function tryDecodeSingle(
     const imageData = cloneImageData(originalImageData);
 
 
-    const t0 = performance.now();
     try {
         fn(imageData);
     } catch {
         return null;
     }
-    const t1 = performance.now();
-    console.log(`Preprocessor "${name}" time: ${(t1 - t0).toFixed(1)} ms`);
 
-    const t2 = performance.now();
-    const results = await readBarcodes(imageData, wasmReaderOptions);
-    const t3 = performance.now();
-    console.log(`Decoder time with "${name}" and ${imageData.width}x${imageData.height}: ${(t3 - t2).toFixed(1)} ms`);
+    let results = await readBarcodes(imageData, wasmReaderOptions);
 
     if (results.length > 0 && results[0].isValid && results[0].text) {
         return {
@@ -139,18 +133,18 @@ async function tryDecodeSingle(
         };
     }
 
-    // if (name === 'none' || name === 'contrast') {
-    //     results = await readBarcodes(imageData, wasmReaderOptionsFallback);
-    //
-    //     if (results.length > 0 && results[0].isValid && results[0].text) {
-    //         return {
-    //             text: results[0].text,
-    //             format: results[0].format,
-    //             preprocessor: name,
-    //             binarizer: 'GlobalHistogram'
-    //         };
-    //     }
-    // }
+    if (name === 'none' || name === 'contrast') {
+        results = await readBarcodes(imageData, wasmReaderOptionsFallback);
+
+        if (results.length > 0 && results[0].isValid && results[0].text) {
+            return {
+                text: results[0].text,
+                format: results[0].format,
+                preprocessor: name,
+                binarizer: 'GlobalHistogram'
+            };
+        }
+    }
 
     return null;
 }
@@ -196,12 +190,6 @@ function BarcodeScanner() {
         }
     }, []);
 
-    useEffect(() => {
-        prepareZXingModule({
-            fireImmediately: true
-        });
-    }, []);
-
     /** Stop camera hardware only — no React state changes. */
     const stopStream = useCallback(() => {
         clearTimeout(scanTimerRef.current);
@@ -224,8 +212,8 @@ function BarcodeScanner() {
             try {
                 stream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: { exact: 'environment' },
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
+                        width: { ideal: 2560 },
+                        height: { ideal: 1440 }
                     }
                 });
             } catch {
@@ -241,11 +229,11 @@ function BarcodeScanner() {
 
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
-            const MAX_DECODE_WIDTH = 1200;
+            const MAX_DECODE_WIDTH = 2048;
 
             preprocessorIndexRef.current = 0;
 
-            const TARGET_FPS = 8;
+            const TARGET_FPS = 6;
             const FRAME_INTERVAL = 1000 / TARGET_FPS;
 
             const scan = async () => {
