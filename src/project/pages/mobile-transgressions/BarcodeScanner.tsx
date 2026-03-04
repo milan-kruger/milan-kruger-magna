@@ -34,7 +34,7 @@ const wasmReaderOptions: ReaderOptions = {
     formats: ['PDF417'],
     tryHarder: false,
     tryRotate: false,
-    tryDownscale: true,
+    tryDownscale: false,
     tryDenoise: false,      // experimental; expensive on mobile CPUs
     maxNumberOfSymbols: 1,
     textMode: 'Plain',
@@ -58,7 +58,7 @@ function getROI(width: number, height: number) {
     if (isPortrait) {
         // For portrait: wider rectangle in the middle horizontally
         const roiWidth = 0.9;  // 80% of screen width
-        const roiHeight = 0.2; // 15% of screen height
+        const roiHeight = 0.15; // 15% of screen height
 
         return {
             x: (1 - roiWidth) / 2,      // Centered horizontally
@@ -246,6 +246,9 @@ function BarcodeScanner() {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
 
+            const MAX_DECODE_WIDTH = videoRef.current.videoHeight > videoRef.current.videoWidth ?
+                videoRef.current.videoWidth * 0.9 : videoRef.current.videoWidth * 0.7;
+
             preprocessorIndexRef.current = 0;
 
             const TARGET_FPS = 6;
@@ -271,11 +274,7 @@ function BarcodeScanner() {
                 const roiX = width * roi.x;
                 const roiY = height * roi.y;
                 const roiWidth = width * roi.width;
-                let roiHeight = height * roi.height;
-
-                if( roiHeight < (roiWidth * 0.3) ) {
-                    roiHeight = roiWidth * 0.3;
-                }
+                const roiHeight = height * roi.height;
 
                 canvas.width = Math.round(roiWidth);
                 canvas.height = Math.round(roiHeight);
@@ -304,7 +303,7 @@ function BarcodeScanner() {
                     // Perspective correction can help with angled barcodes but is expensive, so we only do it when OpenCV is available and skip it on fallback attempts.
                     // This naturally means frame is always grayscale when passed to ZXing, which is a nice optimization since ZXing doesn't care about color and it saves us from having to convert back and forth for OpenCV.
                     if (openCvReady) {
-                        const corrected = perspectiveCorrect(canvas, openCvReady, 800);
+                        const corrected = perspectiveCorrect(canvas, openCvReady, MAX_DECODE_WIDTH);
                         if (corrected) {
                             frame = corrected; // already grayscale
                         }

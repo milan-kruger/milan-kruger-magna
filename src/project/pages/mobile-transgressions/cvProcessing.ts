@@ -64,8 +64,7 @@ export function orderPoints(points: { x: number; y: number }[]): { x: number; y:
 export function perspectiveCorrect(
     canvas: HTMLCanvasElement,
     openCvReady: boolean,
-    targetOutputWidth?: number
-
+    maxWidthParameter : number
 ): ImageData | null {
     if (!openCvReady) return null;
 
@@ -264,19 +263,22 @@ export function perspectiveCorrect(
             return null;
         }
 
+        const MAX_WIDTH = maxWidthParameter; // choose whatever you want
+
+        const maxWidth = Math.max(Math.round(width1), Math.round(width2));
+        let targetWidth = Math.round(maxWidth * 1.2);
+
         const height1 = distance(ordered[0], ordered[3]);
         const height2 = distance(ordered[1], ordered[2]);
+        const maxHeight = Math.max(Math.round(height1), Math.round(height2));
+        let targetHeight = Math.round((maxHeight / maxWidth) * targetWidth);
 
-        // Use targetOutputWidth if provided, otherwise fall back to maxWidthParameter
-        const FORCED_WIDTH = targetOutputWidth || 800; // Default to 800 if not specified
-
-        // Calculate based on forced width
-        const originalWidth = Math.max(width1, width2);
-        const originalHeight = Math.max(height1, height2);
-        const aspectRatio = originalHeight / originalWidth;
-
-        const targetWidth = FORCED_WIDTH;
-        const targetHeight = Math.round(FORCED_WIDTH * aspectRatio);
+// Clamp width while keeping aspect ratio
+        if (targetWidth > MAX_WIDTH) {
+            const scale = MAX_WIDTH / targetWidth;
+            targetWidth = MAX_WIDTH;
+            targetHeight = Math.round(targetHeight * scale);
+        }
 
         // -------- Stage 4: Apply perspective transform --------
         const srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
