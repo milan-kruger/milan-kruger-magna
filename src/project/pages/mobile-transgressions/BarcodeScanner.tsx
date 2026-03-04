@@ -274,7 +274,11 @@ function BarcodeScanner() {
                 const roiX = width * roi.x;
                 const roiY = height * roi.y;
                 const roiWidth = width * roi.width;
-                const roiHeight = height * roi.height;
+                let roiHeight = height * roi.height;
+
+                if( roiHeight < (roiWidth * 0.3) ) {
+                    roiHeight = roiWidth * 0.3;
+                }
 
                 canvas.width = Math.round(roiWidth);
                 canvas.height = Math.round(roiHeight);
