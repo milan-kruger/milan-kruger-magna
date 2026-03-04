@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "f428958c2430dbe7ec97798dc1b83143e76cfd84",
-        "shortHash": "f428958",
-        "message": "Reverted vc processing",
-        "date": "2026-03-04T11:09:26+02:00"
+        "latestCommit": "533ca7f85f46d82bd5f0d24a156cf83925428849",
+        "shortHash": "533ca7f",
+        "message": "Made cv processing Linear instead of cubic",
+        "date": "2026-03-04T11:55:31+02:00"
     }
 }
