@@ -78,23 +78,44 @@ export function perspectiveCorrect(
     const contours = new cv.MatVector();
     const hierarchy = new cv.Mat();
 
+
+
+    // Create a debug canvas for visualization
+    const debugCanvas = document.createElement('canvas');
+    const matToBase64 = (mat: cv.Mat): string => {
+        // Ensure the canvas has the right dimensions
+        debugCanvas.width = mat.cols;
+        debugCanvas.height = mat.rows;
+
+        // Show the mat on the canvas
+        cv.imshow(debugCanvas, mat);
+
+        // Convert to base64
+        return debugCanvas.toDataURL('image/png');
+    };
+
     // Declare variables that need to be accessible in cleanup
     let maxContour: cv.Mat | null = null;
 
     try {
         // -------- Stage 1: Aggressive preprocessing --------
         cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+        console.log('Grayscale image:', matToBase64(gray));
 
         // Apply strong Gaussian blur to reduce noise
         cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
+        console.log('Blurred image:', matToBase64(blurred));
 
         // Use Canny edge detection with aggressive thresholds
         cv.Canny(blurred, edges, 30, 150, 3);
+        console.log('Canny edges (thresholds 30,150):', matToBase64(edges));
 
         // Dilate edges to connect nearby lines
         const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
         cv.dilate(edges, dilated, kernel, new cv.Point(-1, -1), 2);
         kernel.delete();
+
+        console.log('Dilated edges:', matToBase64(dilated));
 
         // Find contours on the dilated edges
         cv.findContours(

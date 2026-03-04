@@ -146,18 +146,18 @@ async function tryDecodeSingle(
     return null;
 }
 
-function imageDataToBase64(imageData: ImageData): string {
-    const canvas = document.createElement("canvas");
-    canvas.width = imageData.width;
-    canvas.height = imageData.height;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("Could not get canvas context");
-
-    ctx.putImageData(imageData, 0, 0);
-
-    return canvas.toDataURL("image/png"); // returns base64 data URL
-}
+// function imageDataToBase64(imageData: ImageData): string {
+//     const canvas = document.createElement("canvas");
+//     canvas.width = imageData.width;
+//     canvas.height = imageData.height;
+//
+//     const ctx = canvas.getContext("2d");
+//     if (!ctx) throw new Error("Could not get canvas context");
+//
+//     ctx.putImageData(imageData, 0, 0);
+//
+//     return canvas.toDataURL("image/png"); // returns base64 data URL
+// }
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -301,8 +301,8 @@ function BarcodeScanner() {
 
                 try {
                     let frame = ctx.getImageData(0, 0, canvas.width, canvas.height)
-                    console.log('Original frame:');
-                    console.log(imageDataToBase64(frame));
+                    // console.log('Original frame:');
+                    // console.log(imageDataToBase64(frame));
                     // Do perspective correction if OpenCV is ready, otherwise just grayscale.
                     // Perspective correction can help with angled barcodes but is expensive, so we only do it when OpenCV is available and skip it on fallback attempts.
                     // This naturally means frame is always grayscale when passed to ZXing, which is a nice optimization since ZXing doesn't care about color and it saves us from having to convert back and forth for OpenCV.
@@ -316,8 +316,8 @@ function BarcodeScanner() {
                             return scanTimerRef.current = globalThis.setTimeout(scan, FRAME_INTERVAL);
                         }
                     }
-                    console.log('Preprocessed frame:');
-                    console.log(imageDataToBase64(frame));
+                    // console.log('Preprocessed frame:');
+                    // console.log(imageDataToBase64(frame));
                     const idx = preprocessorIndexRef.current;
 
                     decoded = await tryDecodeSingle(frame, idx);
