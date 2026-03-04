@@ -216,8 +216,8 @@ function BarcodeScanner() {
         if (!videoRef.current) return;
 
         const videoConstraints: MediaTrackConstraints = {
-            width: { ideal: 3840 },
-            height: { ideal: 2160 },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
             // @ts-expect-error — not in all TS lib typings yet, silently ignored if unsupported
             focusMode: { ideal: 'continuous' },
             exposureMode: { ideal: 'continuous' },
