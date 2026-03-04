@@ -119,13 +119,8 @@ async function tryDecodeSingle(
         return null;
     }
 
-    const t0 = performance.now();
-
-    console.log(imageData.width , imageData.height);
     let results = await readBarcodes(imageData, wasmReaderOptions);
 
-    const t1 = performance.now();
-    console.log(`Time to decode: ${(t1 - t0).toFixed(2)}ms, Preprocessor: ${name}, Binarizer: ${wasmReaderOptions.binarizer}, Results: ${results.length}`);
     if (results.length > 0 && results[0].isValid && results[0].text) {
         return {
             text: results[0].text,
@@ -183,7 +178,6 @@ function BarcodeScanner() {
 
         if (cvModule.onRuntimeInitialized) {
             cvModule.onRuntimeInitialized = () => {
-                console.log("OpenCV ready");
                 setOpenCvReady(true);
             };
         } else {
@@ -239,7 +233,7 @@ function BarcodeScanner() {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
 
-            const MAX_DECODE_WIDTH = 800;
+            const MAX_DECODE_WIDTH = 700;
 
             preprocessorIndexRef.current = 0;
 
@@ -290,7 +284,6 @@ function BarcodeScanner() {
                 try {
                     let frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-                    //const t0 = performance.now();
                     // Do perspective correction if OpenCV is ready, otherwise just grayscale.
                     // Perspective correction can help with angled barcodes but is expensive, so we only do it when OpenCV is available and skip it on fallback attempts.
                     // This naturally means frame is always grayscale when passed to ZXing, which is a nice optimization since ZXing doesn't care about color and it saves us from having to convert back and forth for OpenCV.
@@ -299,16 +292,13 @@ function BarcodeScanner() {
                         if (corrected) {
                             frame = corrected; // already grayscale
                         }
+                        else {
+                            return scanTimerRef.current = globalThis.setTimeout(scan, FRAME_INTERVAL);
+                        }
                     }
-                    //const t1 = performance.now();
-                    //console.log(`Preprocessing time: ${(t1 - t0).toFixed(2)}ms`);
-                    //const idx = preprocessorIndexRef.current;
+                    const idx = preprocessorIndexRef.current;
 
                     decoded = await tryDecodeSingle(frame, idx);
-
-                    //const t2 = performance.now();
-                    //console.log(`Decoding time: ${(t2 - t1).toFixed(2)}ms`);
-                    //console.log(`Total processing time: ${(t2 - t0).toFixed(2)}ms`);
 
                     // Advance for next frame
                     preprocessorIndexRef.current =

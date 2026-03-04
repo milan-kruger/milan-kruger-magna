@@ -73,7 +73,7 @@ export function perspectiveCorrect(
 
     const originalWidth = src.cols;
     const scaleFactor = Math.min(1, maxWidthParameter / originalWidth);
-    const shouldDownsample = scaleFactor < 0.9;
+    const shouldDownsample = scaleFactor < 0.95;
 
     let processedSrc = src;
     let scaledSrc: cv.Mat | null = null;
@@ -84,7 +84,6 @@ export function perspectiveCorrect(
         scaledSrc = new cv.Mat();
         cv.resize(src, scaledSrc, new cv.Size(maxWidthParameter, targetHeight), 0, 0, cv.INTER_AREA);
         processedSrc = scaledSrc;
-        console.log(`Downsampled from ${originalWidth}x${src.rows} to ${maxWidthParameter}x${targetHeight}`);
     }
 
     const gray = new cv.Mat();
@@ -99,7 +98,6 @@ export function perspectiveCorrect(
     let maxContour: cv.Mat | null = null;
 
     try {
-        const t0 = performance.now();
         // -------- Stage 1: Aggressive preprocessing --------
         cv.cvtColor(processedSrc, gray, cv.COLOR_RGBA2GRAY);
 
@@ -128,7 +126,7 @@ export function perspectiveCorrect(
             cleanup();
             return null;
         }
-        const t1 = performance.now();
+
         // -------- Stage 2: Aggressive contour finding --------
         let maxArea = 0;
         let maxPerimeter = 0;
@@ -203,7 +201,7 @@ export function perspectiveCorrect(
             cleanup();
             return null;
         }
-        const t2 = performance.now();
+
         // -------- Stage 3: Extract and order the corner points --------
         const points: { x: number; y: number }[] = [];
 
@@ -298,7 +296,6 @@ export function perspectiveCorrect(
             targetHeight = Math.round(targetHeight * scale);
         }
 
-        const t3 = performance.now();
         // -------- Stage 4: Apply perspective transform --------
         const srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
             ordered[0].x, ordered[0].y,
@@ -322,12 +319,11 @@ export function perspectiveCorrect(
             warped,
             M,
             new cv.Size(targetWidth, targetHeight),
-            cv.INTER_CUBIC,
+            cv.INTER_LINEAR,
             cv.BORDER_CONSTANT,
             new cv.Scalar(255, 255, 255, 255)
         );
 
-        const t4 = performance.now();
         // -------- Stage 5: Aggressive post-processing --------
         // Convert to grayscale
         const warpedGray = new cv.Mat();
@@ -356,9 +352,6 @@ export function perspectiveCorrect(
 
         cleanup();
 
-        const t5 = performance.now();
-        console.log(`Timing: Preprocessing ${t1 - t0}ms, Contour Finding ${t2 - t1}ms, Point Extraction ${t3 - t2}ms, Perspective Transform ${t4 - t3}ms, Post-processing ${t5 - t4}ms`);
-        console.log(`Final time: ${t5 - t0}ms`);
         return imgData;
 
     } catch (error) {
