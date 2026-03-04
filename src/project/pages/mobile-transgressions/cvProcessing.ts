@@ -70,6 +70,23 @@ export function perspectiveCorrect(
 
     // Create a copy of the canvas to work with
     const src = cv.imread(canvas);
+
+    const originalWidth = src.cols;
+    const scaleFactor = Math.min(1, maxWidthParameter / originalWidth);
+    const shouldDownsample = scaleFactor < 0.9;
+
+    let processedSrc = src;
+    let scaledSrc: cv.Mat | null = null;
+
+    if (shouldDownsample) {
+        // Resize to target width specified by maxWidthParameter
+        const targetHeight = Math.round(src.rows * scaleFactor);
+        scaledSrc = new cv.Mat();
+        cv.resize(src, scaledSrc, new cv.Size(maxWidthParameter, targetHeight), 0, 0, cv.INTER_AREA);
+        processedSrc = scaledSrc;
+        console.log(`Downsampled from ${originalWidth}x${src.rows} to ${maxWidthParameter}x${targetHeight}`);
+    }
+
     const gray = new cv.Mat();
     const edges = new cv.Mat();
     const blurred = new cv.Mat();
@@ -82,8 +99,9 @@ export function perspectiveCorrect(
     let maxContour: cv.Mat | null = null;
 
     try {
+        const t0 = performance.now();
         // -------- Stage 1: Aggressive preprocessing --------
-        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+        cv.cvtColor(processedSrc, gray, cv.COLOR_RGBA2GRAY);
 
         // Apply strong Gaussian blur to reduce noise
         cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
@@ -110,11 +128,11 @@ export function perspectiveCorrect(
             cleanup();
             return null;
         }
-
+        const t1 = performance.now();
         // -------- Stage 2: Aggressive contour finding --------
         let maxArea = 0;
         let maxPerimeter = 0;
-        const imageArea = src.rows * src.cols;
+        const imageArea = processedSrc.rows * processedSrc.cols;
         const minArea = imageArea * 0.05; // Reduced to 5% to catch smaller regions
 
         for (let i = 0; i < contours.size(); i++) {
@@ -185,7 +203,7 @@ export function perspectiveCorrect(
             cleanup();
             return null;
         }
-
+        const t2 = performance.now();
         // -------- Stage 3: Extract and order the corner points --------
         const points: { x: number; y: number }[] = [];
 
@@ -273,13 +291,14 @@ export function perspectiveCorrect(
         const maxHeight = Math.max(Math.round(height1), Math.round(height2));
         let targetHeight = Math.round((maxHeight / maxWidth) * targetWidth);
 
-// Clamp width while keeping aspect ratio
+        // Clamp width while keeping aspect ratio
         if (targetWidth > MAX_WIDTH) {
             const scale = MAX_WIDTH / targetWidth;
             targetWidth = MAX_WIDTH;
             targetHeight = Math.round(targetHeight * scale);
         }
 
+        const t3 = performance.now();
         // -------- Stage 4: Apply perspective transform --------
         const srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
             ordered[0].x, ordered[0].y,
@@ -299,7 +318,7 @@ export function perspectiveCorrect(
         const warped = new cv.Mat();
 
         cv.warpPerspective(
-            src,
+            processedSrc,
             warped,
             M,
             new cv.Size(targetWidth, targetHeight),
@@ -308,6 +327,7 @@ export function perspectiveCorrect(
             new cv.Scalar(255, 255, 255, 255)
         );
 
+        const t4 = performance.now();
         // -------- Stage 5: Aggressive post-processing --------
         // Convert to grayscale
         const warpedGray = new cv.Mat();
@@ -335,6 +355,10 @@ export function perspectiveCorrect(
         warped.delete();
 
         cleanup();
+
+        const t5 = performance.now();
+        console.log(`Timing: Preprocessing ${t1 - t0}ms, Contour Finding ${t2 - t1}ms, Point Extraction ${t3 - t2}ms, Perspective Transform ${t4 - t3}ms, Post-processing ${t5 - t4}ms`);
+        console.log(`Final time: ${t5 - t0}ms`);
         return imgData;
 
     } catch (error) {
@@ -345,7 +369,7 @@ export function perspectiveCorrect(
 
     function cleanup() {
         // Safely delete all matrices
-        [src, gray, edges, blurred, threshold, dilated, hierarchy].forEach(mat => {
+        [src, processedSrc, gray, edges, blurred, threshold, dilated, hierarchy].forEach(mat => {
             if (mat && !mat.isDeleted()) mat.delete();
         });
 
