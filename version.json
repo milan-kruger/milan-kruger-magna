@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "ef1bfb2df025464dfc19a3ee269054658c2715de",
-        "shortHash": "ef1bfb2",
-        "message": "Made MAX DECODE WIDTH fixed , and let larger images descale to 800px",
-        "date": "2026-03-04T09:26:32+02:00"
+        "latestCommit": "4435fd9a39b2a41fd47459577345ea14c94d8436",
+        "shortHash": "4435fd9",
+        "message": "Optimized camera",
+        "date": "2026-03-04T10:35:38+02:00"
     }
 }
