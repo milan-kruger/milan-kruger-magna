@@ -32,9 +32,9 @@ type ScannerState =
 // dense/complex PDF417 (e.g. driver's licences) than the pure-JS @zxing/library.
 const wasmReaderOptions: ReaderOptions = {
     formats: ['PDF417'],
-    tryHarder: false,
+    tryHarder: true,
     tryRotate: false,
-    tryDownscale: false,
+    tryDownscale: true,
     tryDenoise: false,      // experimental; expensive on mobile CPUs
     maxNumberOfSymbols: 1,
     textMode: 'Plain',
@@ -307,6 +307,7 @@ function BarcodeScanner() {
                     // Perspective correction can help with angled barcodes but is expensive, so we only do it when OpenCV is available and skip it on fallback attempts.
                     // This naturally means frame is always grayscale when passed to ZXing, which is a nice optimization since ZXing doesn't care about color and it saves us from having to convert back and forth for OpenCV.
                     if (openCvReady) {
+
                         const corrected = perspectiveCorrect(canvas, openCvReady, MAX_DECODE_WIDTH);
                         if (corrected) {
                             frame = corrected; // already grayscale
