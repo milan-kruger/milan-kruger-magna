@@ -70,22 +70,6 @@ export function perspectiveCorrect(
 
     // Create a copy of the canvas to work with
     const src = cv.imread(canvas);
-
-    const originalWidth = src.cols;
-    const scaleFactor = Math.min(1, maxWidthParameter / originalWidth);
-    const shouldDownsample = scaleFactor < 0.95;
-
-    let processedSrc = src;
-    let scaledSrc: cv.Mat | null = null;
-
-    if (shouldDownsample) {
-        // Resize to target width specified by maxWidthParameter
-        const targetHeight = Math.round(src.rows * scaleFactor);
-        scaledSrc = new cv.Mat();
-        cv.resize(src, scaledSrc, new cv.Size(maxWidthParameter, targetHeight), 0, 0, cv.INTER_AREA);
-        processedSrc = scaledSrc;
-    }
-
     const gray = new cv.Mat();
     const edges = new cv.Mat();
     const blurred = new cv.Mat();
@@ -99,7 +83,7 @@ export function perspectiveCorrect(
 
     try {
         // -------- Stage 1: Aggressive preprocessing --------
-        cv.cvtColor(processedSrc, gray, cv.COLOR_RGBA2GRAY);
+        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
 
         // Apply strong Gaussian blur to reduce noise
         cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
@@ -130,7 +114,7 @@ export function perspectiveCorrect(
         // -------- Stage 2: Aggressive contour finding --------
         let maxArea = 0;
         let maxPerimeter = 0;
-        const imageArea = processedSrc.rows * processedSrc.cols;
+        const imageArea = src.rows * src.cols;
         const minArea = imageArea * 0.05; // Reduced to 5% to catch smaller regions
 
         for (let i = 0; i < contours.size(); i++) {
@@ -289,7 +273,7 @@ export function perspectiveCorrect(
         const maxHeight = Math.max(Math.round(height1), Math.round(height2));
         let targetHeight = Math.round((maxHeight / maxWidth) * targetWidth);
 
-        // Clamp width while keeping aspect ratio
+// Clamp width while keeping aspect ratio
         if (targetWidth > MAX_WIDTH) {
             const scale = MAX_WIDTH / targetWidth;
             targetWidth = MAX_WIDTH;
@@ -315,11 +299,11 @@ export function perspectiveCorrect(
         const warped = new cv.Mat();
 
         cv.warpPerspective(
-            processedSrc,
+            src,
             warped,
             M,
             new cv.Size(targetWidth, targetHeight),
-            cv.INTER_LINEAR,
+            cv.INTER_CUBIC,
             cv.BORDER_CONSTANT,
             new cv.Scalar(255, 255, 255, 255)
         );
@@ -351,7 +335,6 @@ export function perspectiveCorrect(
         warped.delete();
 
         cleanup();
-
         return imgData;
 
     } catch (error) {
@@ -362,7 +345,7 @@ export function perspectiveCorrect(
 
     function cleanup() {
         // Safely delete all matrices
-        [src, processedSrc, gray, edges, blurred, threshold, dilated, hierarchy].forEach(mat => {
+        [src, gray, edges, blurred, threshold, dilated, hierarchy].forEach(mat => {
             if (mat && !mat.isDeleted()) mat.delete();
         });
 
