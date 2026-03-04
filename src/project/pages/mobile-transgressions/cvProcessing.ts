@@ -126,21 +126,6 @@ export function perspectiveCorrect(
             cv.CHAIN_APPROX_SIMPLE
         );
 
-        // Create image to draw contours on
-        const contourImg = src.clone();
-
-        // Draw all contours
-        cv.drawContours(
-            contourImg,
-            contours,
-            -1, // draw all contours
-            new cv.Scalar(255, 0, 0, 255), // red
-            2
-        );
-
-        console.log("Contours visualized:", matToBase64(contourImg));
-        contourImg.delete();
-
         if (contours.size() === 0) {
             console.error('No contours found');
             cleanup();
