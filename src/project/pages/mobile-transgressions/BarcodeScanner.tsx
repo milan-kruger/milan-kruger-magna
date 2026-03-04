@@ -239,11 +239,7 @@ function BarcodeScanner() {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
 
-            let MAX_DECODE_WIDTH = videoRef.current.videoWidth * 0.7;
-            if(videoRef.current.videoHeight > videoRef.current.videoWidth) {
-                MAX_DECODE_WIDTH = videoRef.current.videoWidth * 0.9;
-            }
-
+            const MAX_DECODE_WIDTH = 800;
 
             preprocessorIndexRef.current = 0;
 
@@ -272,10 +268,8 @@ function BarcodeScanner() {
                 const roiWidth = width * roi.width;
                 const roiHeight = height * roi.height;
 
-                const scale = MAX_DECODE_WIDTH / roiWidth;
-
-                canvas.width = Math.round(roiWidth * scale);
-                canvas.height = Math.round(roiHeight * scale);
+                canvas.width = Math.round(roiWidth);
+                canvas.height = Math.round(roiHeight);
 
                 ctx.drawImage(
                     video,
