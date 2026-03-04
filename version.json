@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "f0228518421d1556f937e4280b3c2c77adf87799",
-        "shortHash": "f022851",
-        "message": "Added clahe post processsing",
-        "date": "2026-03-04T12:09:03+02:00"
+        "latestCommit": "a7a4a8ba6a963de4126e2ca6901ac3a918d895d1",
+        "shortHash": "a7a4a8b",
+        "message": "Made it explicitly decode 800 images, and scale input to fit that",
+        "date": "2026-03-04T12:21:36+02:00"
     }
 }
