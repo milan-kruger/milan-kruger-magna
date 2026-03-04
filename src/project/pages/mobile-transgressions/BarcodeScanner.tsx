@@ -233,7 +233,8 @@ function BarcodeScanner() {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
 
-            const MAX_DECODE_WIDTH = 700;
+            const MAX_DECODE_WIDTH = videoRef.current.videoHeight > videoRef.current.videoWidth ?
+                videoRef.current.videoWidth * 0.9 : videoRef.current.videoWidth * 0.7;
 
             preprocessorIndexRef.current = 0;
 
