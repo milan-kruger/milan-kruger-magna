@@ -303,7 +303,7 @@ export function perspectiveCorrect(
             warped,
             M,
             new cv.Size(targetWidth, targetHeight),
-            cv.INTER_CUBIC,
+            cv.INTER_LINEAR,
             cv.BORDER_CONSTANT,
             new cv.Scalar(255, 255, 255, 255)
         );
