@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "d411400bef7ef4bcc50d7d2ce46a3fed613ef8db",
-        "shortHash": "d411400",
-        "message": "Reverted commit",
-        "date": "2026-03-04T12:27:01+02:00"
+        "latestCommit": "874d339ee58ea6b26fb813d55afd31a4ab1b47e9",
+        "shortHash": "874d339",
+        "message": "Added in parameters",
+        "date": "2026-03-04T12:31:58+02:00"
     }
 }
