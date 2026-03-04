@@ -209,8 +209,8 @@ function BarcodeScanner() {
         if (!videoRef.current) return;
 
         const videoConstraints: MediaTrackConstraints = {
-            width: { ideal: 2560 },
-            height: { ideal: 1440 },
+            width: { ideal: 3840 },
+            height: { ideal: 2160 },
             // @ts-expect-error — not in all TS lib typings yet, silently ignored if unsupported
             focusMode: { ideal: 'continuous' },
             exposureMode: { ideal: 'continuous' },
@@ -232,11 +232,18 @@ function BarcodeScanner() {
             streamRef.current = stream;
             videoRef.current.srcObject = stream;
             await videoRef.current.play();
+
+
             setState({ phase: 'scanning' });
 
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
-            const MAX_DECODE_WIDTH = 800;
+
+            let MAX_DECODE_WIDTH = videoRef.current.videoWidth * 0.7;
+            if(videoRef.current.videoHeight > videoRef.current.videoWidth) {
+                MAX_DECODE_WIDTH = videoRef.current.videoWidth * 0.9;
+            }
+
 
             preprocessorIndexRef.current = 0;
 
@@ -265,7 +272,7 @@ function BarcodeScanner() {
                 const roiWidth = width * roi.width;
                 const roiHeight = height * roi.height;
 
-                const scale = Math.min(1, MAX_DECODE_WIDTH / roiWidth);
+                const scale = MAX_DECODE_WIDTH / roiWidth;
 
                 canvas.width = Math.round(roiWidth * scale);
                 canvas.height = Math.round(roiHeight * scale);
@@ -289,11 +296,12 @@ function BarcodeScanner() {
                 try {
                     let frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
+                    const t0 = performance.now();
                     // Do perspective correction if OpenCV is ready, otherwise just grayscale.
                     // Perspective correction can help with angled barcodes but is expensive, so we only do it when OpenCV is available and skip it on fallback attempts.
                     // This naturally means frame is always grayscale when passed to ZXing, which is a nice optimization since ZXing doesn't care about color and it saves us from having to convert back and forth for OpenCV.
                     if (openCvReady) {
-                        const corrected = perspectiveCorrect(canvas, openCvReady);
+                        const corrected = perspectiveCorrect(canvas, openCvReady, MAX_DECODE_WIDTH);
                         if (corrected) {
                             frame = corrected; // already grayscale
                         }
@@ -301,6 +309,9 @@ function BarcodeScanner() {
                     const idx = preprocessorIndexRef.current;
 
                     decoded = await tryDecodeSingle(frame, idx);
+
+                    const t1 = performance.now();
+                    console.log(`Total processing time: ${(t1 - t0).toFixed(2)}ms`);
 
                     // Advance for next frame
                     preprocessorIndexRef.current =
