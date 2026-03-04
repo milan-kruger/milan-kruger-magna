@@ -313,8 +313,20 @@ export function perspectiveCorrect(
         const warpedGray = new cv.Mat();
         cv.cvtColor(warped, warpedGray, cv.COLOR_RGBA2GRAY);
 
+        const clahe = new cv.CLAHE(2.0, new cv.Size(8, 8));
+        // clipLimit = 2.0 (contrast strength)
+        // tileGridSize = 8x8 (local regions)
+
+        const enhanced = new cv.Mat();
+        clahe.apply(warpedGray, enhanced);
+
+        // Convert back to RGBA
         const warpedRGBA = new cv.Mat();
-        cv.cvtColor(warpedGray, warpedRGBA, cv.COLOR_GRAY2RGBA);
+        cv.cvtColor(enhanced, warpedRGBA, cv.COLOR_GRAY2RGBA);
+
+        // cleanup
+        clahe.delete();
+        enhanced.delete();
 
         const pixelData = new Uint8ClampedArray(warpedRGBA.data.length);
         pixelData.set(warpedRGBA.data);
