@@ -220,21 +220,47 @@ export function perspectiveCorrect(
 
         // If we have more than 4 points, reduce to 4 corners
         if (points.length > 4) {
-            // Find convex hull
+            // Find convex hull first
             const pointsMat = cv.matFromArray(points.length, 1, cv.CV_32SC2,
                 points.flatMap(p => [p.x, p.y]));
             const hull = new cv.Mat();
             cv.convexHull(pointsMat, hull, false, true);
 
-            points.length = 0;
+            const hullPoints: { x: number; y: number }[] = [];
             for (let i = 0; i < hull.rows; i++) {
                 const ptr = hull.intPtr(i, 0);
                 if (ptr && ptr.length >= 2) {
-                    points.push({ x: ptr[0], y: ptr[1] });
+                    hullPoints.push({ x: ptr[0], y: ptr[1] });
                 }
             }
             hull.delete();
             pointsMat.delete();
+
+            if (hullPoints.length === 4) {
+                points.length = 0;
+                points.push(...hullPoints);
+            } else {
+                // Hull still has != 4 points — pick the point closest to each bounding-box corner
+                const src = hullPoints.length > 0 ? hullPoints : points;
+                const minX = Math.min(...src.map(p => p.x));
+                const maxX = Math.max(...src.map(p => p.x));
+                const minY = Math.min(...src.map(p => p.y));
+                const maxY = Math.max(...src.map(p => p.y));
+
+                const closest = (tx: number, ty: number) =>
+                    src.reduce((best, p) => {
+                        const d = Math.hypot(p.x - tx, p.y - ty);
+                        return d < best.d ? { p, d } : best;
+                    }, { p: src[0], d: Infinity }).p;
+
+                points.length = 0;
+                points.push(
+                    closest(minX, minY),
+                    closest(maxX, minY),
+                    closest(maxX, maxY),
+                    closest(minX, maxY)
+                );
+            }
         }
 
         // Ensure we have exactly 4 points

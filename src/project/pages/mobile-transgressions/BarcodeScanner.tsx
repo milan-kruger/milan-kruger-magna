@@ -297,6 +297,7 @@ function BarcodeScanner() {
                             return scanTimerRef.current = globalThis.setTimeout(scan, FRAME_INTERVAL);
                         }
                     }
+                    console.log("Success");
                     const idx = preprocessorIndexRef.current;
 
                     decoded = await tryDecodeSingle(frame, idx);
