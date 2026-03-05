@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "a79c9c5fff4e54e74afa28a4e3f65e7fb63fc2cf",
-        "shortHash": "a79c9c5",
-        "message": "Made cameras 1440p or 3-4~ MP maximum",
-        "date": "2026-03-05T11:52:54+02:00"
+        "latestCommit": "f6354f2bf1b4747486bc820eb8db25d64398b00f",
+        "shortHash": "f6354f2",
+        "message": "Fixed cv processing not working on lower resolutions",
+        "date": "2026-03-05T12:15:21+02:00"
     }
 }
