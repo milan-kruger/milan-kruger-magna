@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "f6354f2bf1b4747486bc820eb8db25d64398b00f",
-        "shortHash": "f6354f2",
-        "message": "Fixed cv processing not working on lower resolutions",
-        "date": "2026-03-05T12:15:21+02:00"
+        "latestCommit": "885601dba18ab842eabb45dacfe99b6cfdda788d",
+        "shortHash": "885601d",
+        "message": "Added logging",
+        "date": "2026-03-05T13:43:50+02:00"
     }
 }
