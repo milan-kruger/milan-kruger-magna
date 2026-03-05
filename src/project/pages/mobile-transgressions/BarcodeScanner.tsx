@@ -146,6 +146,19 @@ async function tryDecodeSingle(
     return null;
 }
 
+function imageDataToBase64(imageData: ImageData): string {
+    const canvas = document.createElement("canvas");
+    canvas.width = imageData.width;
+    canvas.height = imageData.height;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Could not get canvas context");
+
+    ctx.putImageData(imageData, 0, 0);
+
+    return canvas.toDataURL("image/png"); // returns base64 data URL
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 function BarcodeScanner() {
@@ -203,8 +216,8 @@ function BarcodeScanner() {
         if (!videoRef.current) return;
 
         const videoConstraints: MediaTrackConstraints = {
-            width: { ideal: 2560 },
-            height: { ideal: 1440 },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
             // @ts-expect-error — not in all TS lib typings yet, silently ignored if unsupported
             focusMode: { ideal: 'continuous' },
             exposureMode: { ideal: 'continuous' },
@@ -297,6 +310,7 @@ function BarcodeScanner() {
                             return scanTimerRef.current = globalThis.setTimeout(scan, FRAME_INTERVAL);
                         }
                     }
+                    console.log(imageDataToBase64(frame));
                     const idx = preprocessorIndexRef.current;
 
                     decoded = await tryDecodeSingle(frame, idx);
