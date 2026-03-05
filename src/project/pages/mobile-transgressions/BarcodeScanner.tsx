@@ -57,7 +57,7 @@ function getROI(width: number, height: number) {
 
     if (isPortrait) {
         // For portrait: wider rectangle in the middle horizontally
-        const roiWidth = 0.9;  // 80% of screen width
+        const roiWidth = 0.99;  // 80% of screen width
         const roiHeight = 0.15; // 15% of screen height
 
         return {
@@ -203,8 +203,8 @@ function BarcodeScanner() {
         if (!videoRef.current) return;
 
         const videoConstraints: MediaTrackConstraints = {
-            width: { ideal: 3840 },
-            height: { ideal: 2160 },
+            width: { ideal: 2560 },
+            height: { ideal: 1440 },
             // @ts-expect-error — not in all TS lib typings yet, silently ignored if unsupported
             focusMode: { ideal: 'continuous' },
             exposureMode: { ideal: 'continuous' },
@@ -297,7 +297,6 @@ function BarcodeScanner() {
                             return scanTimerRef.current = globalThis.setTimeout(scan, FRAME_INTERVAL);
                         }
                     }
-                    console.log("Success");
                     const idx = preprocessorIndexRef.current;
 
                     decoded = await tryDecodeSingle(frame, idx);
