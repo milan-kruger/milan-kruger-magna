@@ -32,9 +32,9 @@ type ScannerState =
 // dense/complex PDF417 (e.g. driver's licences) than the pure-JS @zxing/library.
 const wasmReaderOptions: ReaderOptions = {
     formats: ['PDF417'],
-    tryHarder: false,
-    tryRotate: false,
-    tryDownscale: false,
+    tryHarder: true,
+    tryRotate: true,
+    tryDownscale: true,
     tryDenoise: false,      // experimental; expensive on mobile CPUs
     maxNumberOfSymbols: 1,
     textMode: 'Plain',
@@ -216,8 +216,8 @@ function BarcodeScanner() {
         if (!videoRef.current) return;
 
         const videoConstraints: MediaTrackConstraints = {
-            width: { ideal: 2560 },
-            height: { ideal: 1440 },
+            width: { ideal: 3840 },
+            height: { ideal: 2160 },
             // @ts-expect-error — not in all TS lib typings yet, silently ignored if unsupported
             focusMode: { ideal: 'continuous' },
             exposureMode: { ideal: 'continuous' },
