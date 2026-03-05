@@ -82,17 +82,33 @@ export function perspectiveCorrect(
     let maxContour: cv.Mat | null = null;
 
     try {
-        // -------- Stage 1: Aggressive preprocessing --------
+        // -------- Stage 1: Scale-aware preprocessing --------
+        // All kernel / tile sizes are derived from the image width so that the
+        // same algorithm works correctly on both small (< 700 px) and large
+        // canvases without any manual tuning.
+        const imgW = src.cols;
+        const imgH = src.rows;
+
+        // Reference width used to define the "default" sizes below.
+        const REF_WIDTH = 1280;
+        const scaleFactor = imgW / REF_WIDTH;
+
+        // Blur kernel: odd, minimum 3.  Larger on hi-res frames to suppress
+        // more noise; smaller on low-res frames so we don't over-smooth edges.
+        const blurSize = Math.max(3, Math.round((5 * scaleFactor) / 2) * 2 + 1); // always odd
+
+        // Dilation kernel: scales with resolution but stays at least 3×3.
+        // On small images a 5×5 dilation bridges the barcode border with the
+        // image border; a 3×3 (or even 2×2 equivalent) keeps them separate.
+        const dilateSize = Math.max(3, Math.round(5 * scaleFactor));
+
         cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
 
-        // Apply strong Gaussian blur to reduce noise
-        cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
+        cv.GaussianBlur(gray, blurred, new cv.Size(blurSize, blurSize), 0);
 
-        // Use Canny edge detection with aggressive thresholds
         cv.Canny(blurred, edges, 30, 150, 3);
 
-        // Dilate edges to connect nearby lines
-        const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
+        const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(dilateSize, dilateSize));
         cv.dilate(edges, dilated, kernel, new cv.Point(-1, -1), 2);
         kernel.delete();
 
@@ -112,27 +128,21 @@ export function perspectiveCorrect(
         }
 
         // -------- Stage 2: Contour finding — barcode-strip aspect ratio filter --------
-        // A PDF417 / barcode strip is always much wider than it is tall.
-        // We only accept contours whose bounding-box aspect ratio falls in the
-        // range [MIN_ASPECT, MAX_ASPECT] (width / height).  This prevents the
-        // contour selector from accidentally grabbing the full card outline or
-        // the text-only section of the licence.
-        const MIN_ASPECT = 2.5;  // narrowest acceptable barcode strip
-        const MAX_ASPECT = 12.0; // widest acceptable barcode strip
+        const MIN_ASPECT = 2.5;
+        const MAX_ASPECT = 12.0;
 
         let maxArea = 0;
         let maxPerimeter = 0;
-        const imageArea = src.rows * src.cols;
-        const minArea = imageArea * 0.05; // 5% of frame
-
+        const imageArea = imgW * imgH;
+        const minArea = imageArea * 0.05;
+        const maxAreaLimit = imageArea * 0.80; // reject whole-image / full-card boundary
         for (let i = 0; i < contours.size(); i++) {
             const cnt = contours.get(i);
             const area = cv.contourArea(cnt);
             const perimeter = cv.arcLength(cnt, true);
 
             if (area < minArea) continue;
-
-            // Quick aspect-ratio check on the axis-aligned bounding rect before
+            if (area > maxAreaLimit) continue; // reject whole-image / full-card boundary on the axis-aligned bounding rect before
             // doing the more expensive approxPolyDP loop.
             const br = cv.boundingRect(cnt);
             if (br.height === 0) continue;
@@ -171,9 +181,9 @@ export function perspectiveCorrect(
                 const cnt = contours.get(i);
                 const area = cv.contourArea(cnt);
                 if (area <= maxArea) continue;
+                if (area > maxAreaLimit) continue; // reject whole-image boundary
 
                 const br = cv.boundingRect(cnt);
-                if (br.height === 0) continue;
                 const aspect = br.width / br.height;
                 if (aspect < MIN_ASPECT || aspect > MAX_ASPECT) continue;
 
@@ -363,9 +373,12 @@ export function perspectiveCorrect(
         // CLAHE: adaptive histogram equalisation — pushes whites to 255 and
         // blacks to 0 on a tile-by-tile basis, so both dark and bright
         // lighting environments are handled correctly.
+        // Tile size scales with resolution: larger images get more tiles so
+        // local adaptation remains proportionally fine-grained.
+        const claheTileSize = Math.max(4, Math.round(8 * scaleFactor));
         const clahe = new cv.CLAHE(
-            2.0,               // clipLimit  – raise for more aggressive contrast boost
-            new cv.Size(8, 8)  // tileGridSize – smaller = more local adaptation
+            2.0,
+            new cv.Size(claheTileSize, claheTileSize)
         );
         const claheOut = new cv.Mat();
         clahe.apply(warpedGray, claheOut);
