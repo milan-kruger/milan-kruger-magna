@@ -32,9 +32,9 @@ type ScannerState =
 // dense/complex PDF417 (e.g. driver's licences) than the pure-JS @zxing/library.
 const wasmReaderOptions: ReaderOptions = {
     formats: ['PDF417'],
-    tryHarder: true,
+    tryHarder: false,
     tryRotate: false,
-    tryDownscale: true,
+    tryDownscale: false,
     tryDenoise: false,      // experimental; expensive on mobile CPUs
     maxNumberOfSymbols: 1,
     textMode: 'Plain',
@@ -57,7 +57,7 @@ function getROI(width: number, height: number) {
 
     if (isPortrait) {
         // For portrait: wider rectangle in the middle horizontally
-        const roiWidth = 0.9;  // 80% of screen width
+        const roiWidth = 0.99;  // 80% of screen width
         const roiHeight = 0.15; // 15% of screen height
 
         return {
@@ -146,19 +146,6 @@ async function tryDecodeSingle(
     return null;
 }
 
-// function imageDataToBase64(imageData: ImageData): string {
-//     const canvas = document.createElement("canvas");
-//     canvas.width = imageData.width;
-//     canvas.height = imageData.height;
-//
-//     const ctx = canvas.getContext("2d");
-//     if (!ctx) throw new Error("Could not get canvas context");
-//
-//     ctx.putImageData(imageData, 0, 0);
-//
-//     return canvas.toDataURL("image/png"); // returns base64 data URL
-// }
-
 // ─────────────────────────────────────────────────────────────────────────────
 
 function BarcodeScanner() {
@@ -216,8 +203,8 @@ function BarcodeScanner() {
         if (!videoRef.current) return;
 
         const videoConstraints: MediaTrackConstraints = {
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
+            width: { ideal: 2560 },
+            height: { ideal: 1440 },
             // @ts-expect-error — not in all TS lib typings yet, silently ignored if unsupported
             focusMode: { ideal: 'continuous' },
             exposureMode: { ideal: 'continuous' },
@@ -274,11 +261,7 @@ function BarcodeScanner() {
                 const roiX = width * roi.x;
                 const roiY = height * roi.y;
                 const roiWidth = width * roi.width;
-                let roiHeight = height * roi.height;
-
-                if( roiHeight < (roiWidth * 0.3) ) {
-                    roiHeight = roiWidth * 0.3;
-                }
+                const roiHeight = height * roi.height;
 
                 canvas.width = Math.round(roiWidth);
                 canvas.height = Math.round(roiHeight);
@@ -300,14 +283,12 @@ function BarcodeScanner() {
                 let decoded: DecodeSuccess | null = null;
 
                 try {
-                    let frame = ctx.getImageData(0, 0, canvas.width, canvas.height)
-                    // console.log('Original frame:');
-                    // console.log(imageDataToBase64(frame));
+                    let frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
                     // Do perspective correction if OpenCV is ready, otherwise just grayscale.
                     // Perspective correction can help with angled barcodes but is expensive, so we only do it when OpenCV is available and skip it on fallback attempts.
                     // This naturally means frame is always grayscale when passed to ZXing, which is a nice optimization since ZXing doesn't care about color and it saves us from having to convert back and forth for OpenCV.
                     if (openCvReady) {
-
                         const corrected = perspectiveCorrect(canvas, openCvReady, MAX_DECODE_WIDTH);
                         if (corrected) {
                             frame = corrected; // already grayscale
@@ -316,13 +297,9 @@ function BarcodeScanner() {
                             return scanTimerRef.current = globalThis.setTimeout(scan, FRAME_INTERVAL);
                         }
                     }
-                    // console.log('Preprocessed frame:');
-                    // console.log(imageDataToBase64(frame));
                     const idx = preprocessorIndexRef.current;
 
                     decoded = await tryDecodeSingle(frame, idx);
-
-
 
                     // Advance for next frame
                     preprocessorIndexRef.current =

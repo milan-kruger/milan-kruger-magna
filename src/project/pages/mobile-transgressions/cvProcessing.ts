@@ -78,44 +78,39 @@ export function perspectiveCorrect(
     const contours = new cv.MatVector();
     const hierarchy = new cv.Mat();
 
-
-
-    // Create a debug canvas for visualization
-    const debugCanvas = document.createElement('canvas');
-    const matToBase64 = (mat: cv.Mat): string => {
-        // Ensure the canvas has the right dimensions
-        debugCanvas.width = mat.cols;
-        debugCanvas.height = mat.rows;
-
-        // Show the mat on the canvas
-        cv.imshow(debugCanvas, mat);
-
-        // Convert to base64
-        return debugCanvas.toDataURL('image/png');
-    };
-
     // Declare variables that need to be accessible in cleanup
     let maxContour: cv.Mat | null = null;
 
     try {
-        // -------- Stage 1: Aggressive preprocessing --------
+        // -------- Stage 1: Scale-aware preprocessing --------
+        // All kernel / tile sizes are derived from the image width so that the
+        // same algorithm works correctly on both small (< 700 px) and large
+        // canvases without any manual tuning.
+        const imgW = src.cols;
+        const imgH = src.rows;
+
+        // Reference width used to define the "default" sizes below.
+        const REF_WIDTH = 1280;
+        const scaleFactor = imgW / REF_WIDTH;
+
+        // Blur kernel: odd, minimum 3.  Larger on hi-res frames to suppress
+        // more noise; smaller on low-res frames so we don't over-smooth edges.
+        const blurSize = Math.max(3, Math.round((5 * scaleFactor) / 2) * 2 + 1); // always odd
+
+        // Dilation kernel: scales with resolution but stays at least 3×3.
+        // On small images a 5×5 dilation bridges the barcode border with the
+        // image border; a 3×3 (or even 2×2 equivalent) keeps them separate.
+        const dilateSize = Math.max(3, Math.round(5 * scaleFactor));
+
         cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-        console.log('Grayscale image:', matToBase64(gray));
 
-        // Apply strong Gaussian blur to reduce noise
-        cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
-        console.log('Blurred image:', matToBase64(blurred));
+        cv.GaussianBlur(gray, blurred, new cv.Size(blurSize, blurSize), 0);
 
-        // Use Canny edge detection with aggressive thresholds
         cv.Canny(blurred, edges, 30, 150, 3);
-        console.log('Canny edges (thresholds 30,150):', matToBase64(edges));
 
-        // Dilate edges to connect nearby lines
-        const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
+        const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(dilateSize, dilateSize));
         cv.dilate(edges, dilated, kernel, new cv.Point(-1, -1), 2);
         kernel.delete();
-
-        console.log('Dilated edges:', matToBase64(dilated));
 
         // Find contours on the dilated edges
         cv.findContours(
@@ -132,25 +127,34 @@ export function perspectiveCorrect(
             return null;
         }
 
-        // -------- Stage 2: Aggressive contour finding --------
+        // -------- Stage 2: Contour finding — barcode-strip aspect ratio filter --------
+        const MIN_ASPECT = 2.5;
+        const MAX_ASPECT = 12.0;
+
         let maxArea = 0;
         let maxPerimeter = 0;
-        const imageArea = src.rows * src.cols;
-        const minArea = imageArea * 0.05; // Reduced to 5% to catch smaller regions
-
+        const imageArea = imgW * imgH;
+        const minArea = imageArea * 0.05;
+        const maxAreaLimit = imageArea * 0.80; // reject whole-image / full-card boundary
         for (let i = 0; i < contours.size(); i++) {
             const cnt = contours.get(i);
             const area = cv.contourArea(cnt);
             const perimeter = cv.arcLength(cnt, true);
 
             if (area < minArea) continue;
+            if (area > maxAreaLimit) continue; // reject whole-image / full-card boundary on the axis-aligned bounding rect before
+            // doing the more expensive approxPolyDP loop.
+            const br = cv.boundingRect(cnt);
+            if (br.height === 0) continue;
+            const aspect = br.width / br.height;
+            if (aspect < MIN_ASPECT || aspect > MAX_ASPECT) continue;
 
             // Approximate contour to polygon with varying precision
             for (let epsilon = 0.01; epsilon <= 0.05; epsilon += 0.01) {
                 const approx = new cv.Mat();
                 cv.approxPolyDP(cnt, approx, epsilon * perimeter, true);
 
-                // Check if it's a quadrilateral (4 corners) or try to find one with 4-6 corners
+                // Accept quadrilaterals (or near-quads with 5-6 corners)
                 if ((approx.rows === 4 || approx.rows === 5 || approx.rows === 6) &&
                     area > maxArea &&
                     perimeter > maxPerimeter) {
@@ -159,27 +163,33 @@ export function perspectiveCorrect(
                     maxPerimeter = perimeter;
                     if (maxContour) maxContour.delete();
                     maxContour = approx.clone();
-                    break; // Found a good approximation
+                    break;
                 }
 
                 approx.delete();
             }
         }
 
-        // If no quadrilateral found, try a different approach
+        // If no qualifying contour found, try a different approach
         if (!maxContour) {
-            // Find the largest contour and try to fit a rectangle
+            // Find the largest contour whose bounding-box aspect ratio still
+            // looks like a barcode strip (same MIN_ASPECT / MAX_ASPECT as above).
             let largestContour: cv.Mat | null = null;
             maxArea = 0;
 
             for (let i = 0; i < contours.size(); i++) {
                 const cnt = contours.get(i);
                 const area = cv.contourArea(cnt);
-                if (area > maxArea) {
-                    maxArea = area;
-                    if (largestContour) largestContour.delete();
-                    largestContour = cnt.clone();
-                }
+                if (area <= maxArea) continue;
+                if (area > maxAreaLimit) continue; // reject whole-image boundary
+
+                const br = cv.boundingRect(cnt);
+                const aspect = br.width / br.height;
+                if (aspect < MIN_ASPECT || aspect > MAX_ASPECT) continue;
+
+                maxArea = area;
+                if (largestContour) largestContour.delete();
+                largestContour = cnt.clone();
             }
 
             if (largestContour) {
@@ -241,21 +251,47 @@ export function perspectiveCorrect(
 
         // If we have more than 4 points, reduce to 4 corners
         if (points.length > 4) {
-            // Find convex hull
+            // Find convex hull first
             const pointsMat = cv.matFromArray(points.length, 1, cv.CV_32SC2,
                 points.flatMap(p => [p.x, p.y]));
             const hull = new cv.Mat();
             cv.convexHull(pointsMat, hull, false, true);
 
-            points.length = 0;
+            const hullPoints: { x: number; y: number }[] = [];
             for (let i = 0; i < hull.rows; i++) {
                 const ptr = hull.intPtr(i, 0);
                 if (ptr && ptr.length >= 2) {
-                    points.push({ x: ptr[0], y: ptr[1] });
+                    hullPoints.push({ x: ptr[0], y: ptr[1] });
                 }
             }
             hull.delete();
             pointsMat.delete();
+
+            if (hullPoints.length === 4) {
+                points.length = 0;
+                points.push(...hullPoints);
+            } else {
+                // Hull still has != 4 points — pick the point closest to each bounding-box corner
+                const src = hullPoints.length > 0 ? hullPoints : points;
+                const minX = Math.min(...src.map(p => p.x));
+                const maxX = Math.max(...src.map(p => p.x));
+                const minY = Math.min(...src.map(p => p.y));
+                const maxY = Math.max(...src.map(p => p.y));
+
+                const closest = (tx: number, ty: number) =>
+                    src.reduce((best, p) => {
+                        const d = Math.hypot(p.x - tx, p.y - ty);
+                        return d < best.d ? { p, d } : best;
+                    }, { p: src[0], d: Infinity }).p;
+
+                points.length = 0;
+                points.push(
+                    closest(minX, minY),
+                    closest(maxX, minY),
+                    closest(maxX, maxY),
+                    closest(minX, maxY)
+                );
+            }
         }
 
         // Ensure we have exactly 4 points
@@ -329,25 +365,30 @@ export function perspectiveCorrect(
             new cv.Scalar(255, 255, 255, 255)
         );
 
-        // -------- Stage 5: Aggressive post-processing --------
+        // -------- Stage 5: Post-processing — contrast normalisation --------
         // Convert to grayscale
         const warpedGray = new cv.Mat();
         cv.cvtColor(warped, warpedGray, cv.COLOR_RGBA2GRAY);
 
-        const clahe = new cv.CLAHE(2.0, new cv.Size(8, 8));
-        // clipLimit = 2.0 (contrast strength)
-        // tileGridSize = 8x8 (local regions)
+        // CLAHE: adaptive histogram equalisation — pushes whites to 255 and
+        // blacks to 0 on a tile-by-tile basis, so both dark and bright
+        // lighting environments are handled correctly.
+        // Tile size scales with resolution: larger images get more tiles so
+        // local adaptation remains proportionally fine-grained.
+        const claheTileSize = Math.max(4, Math.round(8 * scaleFactor));
+        const clahe = new cv.CLAHE(
+            2.0,
+            new cv.Size(claheTileSize, claheTileSize)
+        );
+        const claheOut = new cv.Mat();
+        clahe.apply(warpedGray, claheOut);
 
-        const enhanced = new cv.Mat();
-        clahe.apply(warpedGray, enhanced);
+        // Linear stretch: map the darkest remaining pixel to 0 and the
+        // brightest to 255, so the output is always full-range.
+        cv.normalize(claheOut, claheOut, 0, 255, cv.NORM_MINMAX);
 
-        // Convert back to RGBA
         const warpedRGBA = new cv.Mat();
-        cv.cvtColor(enhanced, warpedRGBA, cv.COLOR_GRAY2RGBA);
-
-        // cleanup
-        clahe.delete();
-        enhanced.delete();
+        cv.cvtColor(claheOut, warpedRGBA, cv.COLOR_GRAY2RGBA);
 
         const pixelData = new Uint8ClampedArray(warpedRGBA.data.length);
         pixelData.set(warpedRGBA.data);
@@ -358,6 +399,7 @@ export function perspectiveCorrect(
             warpedRGBA.rows
         );
 
+        claheOut.delete();
         warpedGray.delete();
         warpedRGBA.delete();
 
