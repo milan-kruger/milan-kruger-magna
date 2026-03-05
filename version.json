@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "4e6ebe5eadf5b63bb9f39cac0e15198486c20e1e",
-        "shortHash": "4e6ebe5",
-        "message": "Made it 4k or 8MP camera",
-        "date": "2026-03-06T00:53:35+02:00"
+        "latestCommit": "eba794bdf839c246d6d3b6c0763f53c0147d6af3",
+        "shortHash": "eba794b",
+        "message": "Fixed some memory leaks and let all preprocessing happen on same frame for reliability since open cv does such a good job anyways",
+        "date": "2026-03-06T01:43:30+02:00"
     }
 }
