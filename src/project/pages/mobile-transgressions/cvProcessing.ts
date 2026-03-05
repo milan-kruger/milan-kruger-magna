@@ -78,44 +78,23 @@ export function perspectiveCorrect(
     const contours = new cv.MatVector();
     const hierarchy = new cv.Mat();
 
-
-
-    // Create a debug canvas for visualization
-    const debugCanvas = document.createElement('canvas');
-    const matToBase64 = (mat: cv.Mat): string => {
-        // Ensure the canvas has the right dimensions
-        debugCanvas.width = mat.cols;
-        debugCanvas.height = mat.rows;
-
-        // Show the mat on the canvas
-        cv.imshow(debugCanvas, mat);
-
-        // Convert to base64
-        return debugCanvas.toDataURL('image/png');
-    };
-
     // Declare variables that need to be accessible in cleanup
     let maxContour: cv.Mat | null = null;
 
     try {
         // -------- Stage 1: Aggressive preprocessing --------
         cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-        console.log('Grayscale image:', matToBase64(gray));
 
         // Apply strong Gaussian blur to reduce noise
         cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
-        console.log('Blurred image:', matToBase64(blurred));
 
         // Use Canny edge detection with aggressive thresholds
         cv.Canny(blurred, edges, 30, 150, 3);
-        console.log('Canny edges (thresholds 30,150):', matToBase64(edges));
 
         // Dilate edges to connect nearby lines
         const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
         cv.dilate(edges, dilated, kernel, new cv.Point(-1, -1), 2);
         kernel.delete();
-
-        console.log('Dilated edges:', matToBase64(dilated));
 
         // Find contours on the dilated edges
         cv.findContours(
@@ -125,21 +104,6 @@ export function perspectiveCorrect(
             cv.RETR_EXTERNAL,
             cv.CHAIN_APPROX_SIMPLE
         );
-
-        // Create image to draw contours on
-        const contourImg = src.clone();
-
-        // Draw all contours
-        cv.drawContours(
-            contourImg,
-            contours,
-            -1, // draw all contours
-            new cv.Scalar(255, 0, 0, 255), // red
-            2
-        );
-
-        console.log("Contours visualized:", matToBase64(contourImg));
-        contourImg.delete();
 
         if (contours.size() === 0) {
             console.error('No contours found');
@@ -256,21 +220,47 @@ export function perspectiveCorrect(
 
         // If we have more than 4 points, reduce to 4 corners
         if (points.length > 4) {
-            // Find convex hull
+            // Find convex hull first
             const pointsMat = cv.matFromArray(points.length, 1, cv.CV_32SC2,
                 points.flatMap(p => [p.x, p.y]));
             const hull = new cv.Mat();
             cv.convexHull(pointsMat, hull, false, true);
 
-            points.length = 0;
+            const hullPoints: { x: number; y: number }[] = [];
             for (let i = 0; i < hull.rows; i++) {
                 const ptr = hull.intPtr(i, 0);
                 if (ptr && ptr.length >= 2) {
-                    points.push({ x: ptr[0], y: ptr[1] });
+                    hullPoints.push({ x: ptr[0], y: ptr[1] });
                 }
             }
             hull.delete();
             pointsMat.delete();
+
+            if (hullPoints.length === 4) {
+                points.length = 0;
+                points.push(...hullPoints);
+            } else {
+                // Hull still has != 4 points — pick the point closest to each bounding-box corner
+                const src = hullPoints.length > 0 ? hullPoints : points;
+                const minX = Math.min(...src.map(p => p.x));
+                const maxX = Math.max(...src.map(p => p.x));
+                const minY = Math.min(...src.map(p => p.y));
+                const maxY = Math.max(...src.map(p => p.y));
+
+                const closest = (tx: number, ty: number) =>
+                    src.reduce((best, p) => {
+                        const d = Math.hypot(p.x - tx, p.y - ty);
+                        return d < best.d ? { p, d } : best;
+                    }, { p: src[0], d: Infinity }).p;
+
+                points.length = 0;
+                points.push(
+                    closest(minX, minY),
+                    closest(maxX, minY),
+                    closest(maxX, maxY),
+                    closest(minX, maxY)
+                );
+            }
         }
 
         // Ensure we have exactly 4 points
@@ -349,20 +339,8 @@ export function perspectiveCorrect(
         const warpedGray = new cv.Mat();
         cv.cvtColor(warped, warpedGray, cv.COLOR_RGBA2GRAY);
 
-        const clahe = new cv.CLAHE(2.0, new cv.Size(8, 8));
-        // clipLimit = 2.0 (contrast strength)
-        // tileGridSize = 8x8 (local regions)
-
-        const enhanced = new cv.Mat();
-        clahe.apply(warpedGray, enhanced);
-
-        // Convert back to RGBA
         const warpedRGBA = new cv.Mat();
-        cv.cvtColor(enhanced, warpedRGBA, cv.COLOR_GRAY2RGBA);
-
-        // cleanup
-        clahe.delete();
-        enhanced.delete();
+        cv.cvtColor(warpedGray, warpedRGBA, cv.COLOR_GRAY2RGBA);
 
         const pixelData = new Uint8ClampedArray(warpedRGBA.data.length);
         pixelData.set(warpedRGBA.data);
