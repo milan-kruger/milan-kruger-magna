@@ -111,11 +111,19 @@ export function perspectiveCorrect(
             return null;
         }
 
-        // -------- Stage 2: Aggressive contour finding --------
+        // -------- Stage 2: Contour finding — barcode-strip aspect ratio filter --------
+        // A PDF417 / barcode strip is always much wider than it is tall.
+        // We only accept contours whose bounding-box aspect ratio falls in the
+        // range [MIN_ASPECT, MAX_ASPECT] (width / height).  This prevents the
+        // contour selector from accidentally grabbing the full card outline or
+        // the text-only section of the licence.
+        const MIN_ASPECT = 2.5;  // narrowest acceptable barcode strip
+        const MAX_ASPECT = 12.0; // widest acceptable barcode strip
+
         let maxArea = 0;
         let maxPerimeter = 0;
         const imageArea = src.rows * src.cols;
-        const minArea = imageArea * 0.05; // Reduced to 5% to catch smaller regions
+        const minArea = imageArea * 0.05; // 5% of frame
 
         for (let i = 0; i < contours.size(); i++) {
             const cnt = contours.get(i);
@@ -124,12 +132,19 @@ export function perspectiveCorrect(
 
             if (area < minArea) continue;
 
+            // Quick aspect-ratio check on the axis-aligned bounding rect before
+            // doing the more expensive approxPolyDP loop.
+            const br = cv.boundingRect(cnt);
+            if (br.height === 0) continue;
+            const aspect = br.width / br.height;
+            if (aspect < MIN_ASPECT || aspect > MAX_ASPECT) continue;
+
             // Approximate contour to polygon with varying precision
             for (let epsilon = 0.01; epsilon <= 0.05; epsilon += 0.01) {
                 const approx = new cv.Mat();
                 cv.approxPolyDP(cnt, approx, epsilon * perimeter, true);
 
-                // Check if it's a quadrilateral (4 corners) or try to find one with 4-6 corners
+                // Accept quadrilaterals (or near-quads with 5-6 corners)
                 if ((approx.rows === 4 || approx.rows === 5 || approx.rows === 6) &&
                     area > maxArea &&
                     perimeter > maxPerimeter) {
@@ -138,27 +153,33 @@ export function perspectiveCorrect(
                     maxPerimeter = perimeter;
                     if (maxContour) maxContour.delete();
                     maxContour = approx.clone();
-                    break; // Found a good approximation
+                    break;
                 }
 
                 approx.delete();
             }
         }
 
-        // If no quadrilateral found, try a different approach
+        // If no qualifying contour found, try a different approach
         if (!maxContour) {
-            // Find the largest contour and try to fit a rectangle
+            // Find the largest contour whose bounding-box aspect ratio still
+            // looks like a barcode strip (same MIN_ASPECT / MAX_ASPECT as above).
             let largestContour: cv.Mat | null = null;
             maxArea = 0;
 
             for (let i = 0; i < contours.size(); i++) {
                 const cnt = contours.get(i);
                 const area = cv.contourArea(cnt);
-                if (area > maxArea) {
-                    maxArea = area;
-                    if (largestContour) largestContour.delete();
-                    largestContour = cnt.clone();
-                }
+                if (area <= maxArea) continue;
+
+                const br = cv.boundingRect(cnt);
+                if (br.height === 0) continue;
+                const aspect = br.width / br.height;
+                if (aspect < MIN_ASPECT || aspect > MAX_ASPECT) continue;
+
+                maxArea = area;
+                if (largestContour) largestContour.delete();
+                largestContour = cnt.clone();
             }
 
             if (largestContour) {
@@ -334,13 +355,27 @@ export function perspectiveCorrect(
             new cv.Scalar(255, 255, 255, 255)
         );
 
-        // -------- Stage 5: Aggressive post-processing --------
+        // -------- Stage 5: Post-processing — contrast normalisation --------
         // Convert to grayscale
         const warpedGray = new cv.Mat();
         cv.cvtColor(warped, warpedGray, cv.COLOR_RGBA2GRAY);
 
+        // CLAHE: adaptive histogram equalisation — pushes whites to 255 and
+        // blacks to 0 on a tile-by-tile basis, so both dark and bright
+        // lighting environments are handled correctly.
+        const clahe = new cv.CLAHE(
+            2.0,               // clipLimit  – raise for more aggressive contrast boost
+            new cv.Size(8, 8)  // tileGridSize – smaller = more local adaptation
+        );
+        const claheOut = new cv.Mat();
+        clahe.apply(warpedGray, claheOut);
+
+        // Linear stretch: map the darkest remaining pixel to 0 and the
+        // brightest to 255, so the output is always full-range.
+        cv.normalize(claheOut, claheOut, 0, 255, cv.NORM_MINMAX);
+
         const warpedRGBA = new cv.Mat();
-        cv.cvtColor(warpedGray, warpedRGBA, cv.COLOR_GRAY2RGBA);
+        cv.cvtColor(claheOut, warpedRGBA, cv.COLOR_GRAY2RGBA);
 
         const pixelData = new Uint8ClampedArray(warpedRGBA.data.length);
         pixelData.set(warpedRGBA.data);
@@ -351,6 +386,7 @@ export function perspectiveCorrect(
             warpedRGBA.rows
         );
 
+        claheOut.delete();
         warpedGray.delete();
         warpedRGBA.delete();
 
