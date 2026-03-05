@@ -33,7 +33,7 @@ type ScannerState =
 const wasmReaderOptions: ReaderOptions = {
     formats: ['PDF417'],
     tryHarder: true,
-    tryRotate: true,
+    tryRotate: false,
     tryDownscale: true,
     tryDenoise: false,      // experimental; expensive on mobile CPUs
     maxNumberOfSymbols: 1,
@@ -57,7 +57,7 @@ function getROI(width: number, height: number) {
 
     if (isPortrait) {
         // For portrait: wider rectangle in the middle horizontally
-        const roiWidth = 0.99;  // 80% of screen width
+        const roiWidth = 0.80;  // 80% of screen width
         const roiHeight = 0.15; // 15% of screen height
 
         return {
@@ -146,6 +146,23 @@ async function tryDecodeSingle(
     return null;
 }
 
+/**
+ * Since CV perspective correction already does the expensive work for a frame,
+ * run ALL preprocessors on that corrected output in sequence and return the
+ * first hit. This trades a bit more CPU per frame for a much faster first-decode,
+ * because we no longer have to wait N frames for the right preprocessor to come
+ * around in the round-robin cycle.
+ */
+async function tryDecodeAllPreprocessors(
+    correctedFrame: ImageData
+): Promise<DecodeSuccess | null> {
+    for (let i = 0; i < preprocessors.length; i++) {
+        const result = await tryDecodeSingle(correctedFrame, i);
+        if (result) return result;
+    }
+    return null;
+}
+
 function imageDataToBase64(imageData: ImageData): string {
     const canvas = document.createElement("canvas");
     canvas.width = imageData.width;
@@ -179,12 +196,10 @@ function BarcodeScanner() {
     const videoRef = useRef<HTMLVideoElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
     const scanTimerRef = useRef<number>(0);
+    const roiRef = useRef<ReturnType<typeof getROI> | null>(null);
 
     const [openCvReady, setOpenCvReady] = useState(false);
     const visualRoi = roi ? shrinkROI(roi, 0.05) : null;
-
-    const preprocessorIndexRef = useRef(0);
-
 
     useEffect(() => {
         const cvModule = cv as OpenCVModule;
@@ -216,8 +231,8 @@ function BarcodeScanner() {
         if (!videoRef.current) return;
 
         const videoConstraints: MediaTrackConstraints = {
-            width: { ideal: 2560 },
-            height: { ideal: 1440 },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
             // @ts-expect-error — not in all TS lib typings yet, silently ignored if unsupported
             focusMode: { ideal: 'continuous' },
             exposureMode: { ideal: 'continuous' },
@@ -249,8 +264,6 @@ function BarcodeScanner() {
             const MAX_DECODE_WIDTH = videoRef.current.videoHeight > videoRef.current.videoWidth ?
                 videoRef.current.videoWidth * 0.9 : videoRef.current.videoWidth * 0.7;
 
-            preprocessorIndexRef.current = 0;
-
             const TARGET_FPS = 6;
             const FRAME_INTERVAL = 1000 / TARGET_FPS;
 
@@ -269,15 +282,25 @@ function BarcodeScanner() {
                 const width = video.videoWidth;
                 const height = video.videoHeight;
 
-                const roi = getROI(width, height);
-                setRoi(roi);
+                if (!roiRef.current) {
+                    roiRef.current = getROI(width, height);
+                    setRoi(roiRef.current); // only for UI overlay
+                }
+
+                const roi = roiRef.current!;
+
                 const roiX = width * roi.x;
                 const roiY = height * roi.y;
                 const roiWidth = width * roi.width;
                 const roiHeight = height * roi.height;
 
-                canvas.width = Math.round(roiWidth);
-                canvas.height = Math.round(roiHeight);
+                const newW = Math.round(roiWidth);
+                const newH = Math.round(roiHeight);
+
+                if (canvas.width !== newW || canvas.height !== newH) {
+                    canvas.width = newW;
+                    canvas.height = newH;
+                }
 
                 ctx.drawImage(
                     video,
@@ -297,7 +320,6 @@ function BarcodeScanner() {
 
                 try {
                     let frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
                     // Do perspective correction if OpenCV is ready, otherwise just grayscale.
                     // Perspective correction can help with angled barcodes but is expensive, so we only do it when OpenCV is available and skip it on fallback attempts.
                     // This naturally means frame is always grayscale when passed to ZXing, which is a nice optimization since ZXing doesn't care about color and it saves us from having to convert back and forth for OpenCV.
@@ -311,13 +333,12 @@ function BarcodeScanner() {
                         }
                     }
                     console.log(imageDataToBase64(frame));
-                    const idx = preprocessorIndexRef.current;
 
-                    decoded = await tryDecodeSingle(frame, idx);
-
-                    // Advance for next frame
-                    preprocessorIndexRef.current =
-                        (preprocessorIndexRef.current + 1) % preprocessors.length;
+                    // Run all preprocessors on this frame's (CV-corrected) output.
+                    // Since CV already does the heavy lifting, it's worth trying every
+                    // preprocessor now rather than cycling one per frame — we get a
+                    // result on the very first frame that would have decoded at all.
+                    decoded = await tryDecodeAllPreprocessors(frame);
 
                 } catch {
                     // no barcode detected this frame

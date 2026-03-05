@@ -61,6 +61,31 @@ export function orderPoints(points: { x: number; y: number }[]): { x: number; y:
     }
 }
 
+export function isBlurry(
+    grayMat: cv.Mat,
+    threshold: number = 80
+): boolean {
+    const laplacian = new cv.Mat();
+    try {
+        cv.Laplacian(grayMat, laplacian, cv.CV_64F);
+
+        // Compute mean and stddev
+        const mean = new cv.Mat();
+        const stddev = new cv.Mat();
+        cv.meanStdDev(laplacian, mean, stddev);
+
+        const variance = Math.pow(stddev.doubleAt(0, 0), 2);
+
+        mean.delete();
+        stddev.delete();
+
+        return variance < threshold;
+    } finally {
+        laplacian.delete();
+    }
+}
+
+
 export function perspectiveCorrect(
     canvas: HTMLCanvasElement,
     openCvReady: boolean,
@@ -73,7 +98,6 @@ export function perspectiveCorrect(
     const gray = new cv.Mat();
     const edges = new cv.Mat();
     const blurred = new cv.Mat();
-    const threshold = new cv.Mat();
     const dilated = new cv.Mat();
     const contours = new cv.MatVector();
     const hierarchy = new cv.Mat();
@@ -103,6 +127,11 @@ export function perspectiveCorrect(
         const dilateSize = Math.max(3, Math.round(5 * scaleFactor));
 
         cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+
+        if (isBlurry(gray)) {
+            cleanup();
+            return null;
+        }
 
         cv.GaussianBlur(gray, blurred, new cv.Size(blurSize, blurSize), 0);
 
@@ -330,7 +359,16 @@ export function perspectiveCorrect(
         const maxHeight = Math.max(Math.round(height1), Math.round(height2));
         let targetHeight = Math.round((maxHeight / maxWidth) * targetWidth);
 
-// Clamp width while keeping aspect ratio
+        // Calculate padding based on resolution (10-50px scaled)
+        const paddingScale = Math.min(Math.max(imgW / REF_WIDTH, 0.5), 2.0);
+        const verticalPadding = Math.round(20 * paddingScale); // ~10-40px depending on resolution
+        const horizontalPadding = Math.round(15 * paddingScale); // ~7-30px depending on resolution
+
+        // Add padding to target dimensions
+        targetWidth += horizontalPadding * 2;
+        targetHeight += verticalPadding * 2;
+
+        // Clamp width while keeping aspect ratio
         if (targetWidth > MAX_WIDTH) {
             const scale = MAX_WIDTH / targetWidth;
             targetWidth = MAX_WIDTH;
@@ -346,10 +384,10 @@ export function perspectiveCorrect(
         ]);
 
         const dstTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
-            0, 0,
-            targetWidth - 1, 0,
-            targetWidth - 1, targetHeight - 1,
-            0, targetHeight - 1
+            horizontalPadding, verticalPadding,
+            targetWidth - 1 - horizontalPadding, verticalPadding,
+            targetWidth - 1 - horizontalPadding, targetHeight - 1 - verticalPadding,
+            horizontalPadding, targetHeight - 1 - verticalPadding
         ]);
 
         const M = cv.getPerspectiveTransform(srcTri, dstTri);
@@ -382,6 +420,8 @@ export function perspectiveCorrect(
         );
         const claheOut = new cv.Mat();
         clahe.apply(warpedGray, claheOut);
+
+        clahe.delete();
 
         // Linear stretch: map the darkest remaining pixel to 0 and the
         // brightest to 255, so the output is always full-range.
@@ -420,15 +460,10 @@ export function perspectiveCorrect(
 
     function cleanup() {
         // Safely delete all matrices
-        [src, gray, edges, blurred, threshold, dilated, hierarchy].forEach(mat => {
+        [src, gray, edges, blurred, dilated, hierarchy].forEach(mat => {
             if (mat && !mat.isDeleted()) mat.delete();
         });
 
-        // Delete contours
-        for (let i = 0; i < contours.size(); i++) {
-            const cnt = contours.get(i);
-            if (cnt && !cnt.isDeleted()) cnt.delete();
-        }
         contours.delete();
 
         // Delete maxContour if it exists
