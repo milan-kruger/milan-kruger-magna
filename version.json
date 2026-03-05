@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "078c64d23b7e974d358f35f5dad2fb32ac04fdbc",
-        "shortHash": "078c64d",
-        "message": "Reverted to working version for high res",
-        "date": "2026-03-05T09:57:10+02:00"
+        "latestCommit": "a79c9c5fff4e54e74afa28a4e3f65e7fb63fc2cf",
+        "shortHash": "a79c9c5",
+        "message": "Made cameras 1440p or 3-4~ MP maximum",
+        "date": "2026-03-05T11:52:54+02:00"
     }
 }
