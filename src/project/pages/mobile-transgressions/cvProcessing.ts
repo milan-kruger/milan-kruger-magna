@@ -427,8 +427,14 @@ export function perspectiveCorrect(
         // brightest to 255, so the output is always full-range.
         cv.normalize(claheOut, claheOut, 0, 255, cv.NORM_MINMAX);
 
+        // Apply Gaussian blur to reduce high-frequency noise that causes checksum errors
+        // This is more efficient than running blur in multiple preprocessors
+        // Slight blur improves barcode decoding by smoothing sensor noise
+        const blurredOut = new cv.Mat();
+        cv.GaussianBlur(claheOut, blurredOut, new cv.Size(3, 3), 0, 0, cv.BORDER_DEFAULT);
+
         const warpedRGBA = new cv.Mat();
-        cv.cvtColor(claheOut, warpedRGBA, cv.COLOR_GRAY2RGBA);
+        cv.cvtColor(blurredOut, warpedRGBA, cv.COLOR_GRAY2RGBA);
 
         const pixelData = new Uint8ClampedArray(warpedRGBA.data.length);
         pixelData.set(warpedRGBA.data);
@@ -439,6 +445,7 @@ export function perspectiveCorrect(
             warpedRGBA.rows
         );
 
+        blurredOut.delete();
         claheOut.delete();
         warpedGray.delete();
         warpedRGBA.delete();

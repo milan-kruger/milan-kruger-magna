@@ -33,9 +33,9 @@ type ScannerState =
 const wasmReaderOptions: ReaderOptions = {
     formats: ['PDF417'],
     tryHarder: true,
-    tryRotate: false,
+    tryRotate: true,
     tryDownscale: true,
-    tryDenoise: false,      // experimental; expensive on mobile CPUs
+    tryDenoise: true,       // Enable denoising to reduce checksum errors from image noise
     maxNumberOfSymbols: 1,
     textMode: 'Plain',
     binarizer: 'LocalAverage',
@@ -57,8 +57,8 @@ function getROI(width: number, height: number) {
 
     if (isPortrait) {
         // For portrait: wider rectangle in the middle horizontally
-        const roiWidth = 0.80;  // 80% of screen width
-        const roiHeight = 0.15; // 15% of screen height
+        const roiWidth = 0.99;  // 80% of screen width
+        const roiHeight = 0.2; // 15% of screen height
 
         return {
             x: (1 - roiWidth) / 2,      // Centered horizontally
@@ -69,7 +69,7 @@ function getROI(width: number, height: number) {
     }
 
     // For landscape: wider rectangle in the middle horizontally
-    const roiWidth = 0.7;  // 70% of screen width
+    const roiWidth = 0.85;  // 70% of screen width
     const roiHeight = 0.4; // 40% of screen height
 
     return {
@@ -130,7 +130,9 @@ async function tryDecodeSingle(
         };
     }
 
-    if (name === 'none' || name === 'contrast') {
+    // Try fallback binarizer for preprocessors that benefit from alternative binarization
+    // Especially useful for noise-reducing preprocessors (median) and basic ones (none, contrast)
+    if (name === 'none' || name === 'contrast' || name.includes('median')) {
         results = await readBarcodes(imageData, wasmReaderOptionsFallback);
 
         if (results.length > 0 && results[0].isValid && results[0].text) {
@@ -231,8 +233,8 @@ function BarcodeScanner() {
         if (!videoRef.current) return;
 
         const videoConstraints: MediaTrackConstraints = {
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
+            width: { ideal: 2560 },
+            height: { ideal: 1440 },
             // @ts-expect-error — not in all TS lib typings yet, silently ignored if unsupported
             focusMode: { ideal: 'continuous' },
             exposureMode: { ideal: 'continuous' },

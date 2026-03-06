@@ -249,30 +249,106 @@ export function gamma(imageData: ImageData): ImageData {
 }
 
 /* ----------------------------------------------------------- */
+/* GAUSSIAN BLUR (for noise reduction)                         */
+/* ----------------------------------------------------------- */
+
+export function gaussianBlur(imageData: ImageData): ImageData {
+    const { width, height, data } = imageData;
+    const copy = new Uint8ClampedArray(data);
+
+    // Simple 3x3 Gaussian kernel (approximation)
+    const kernel = [
+        1, 2, 1,
+        2, 4, 2,
+        1, 2, 1
+    ];
+    const kernelSum = 16;
+
+    for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+            let sum = 0;
+            let k = 0;
+
+            for (let ky = -1; ky <= 1; ky++) {
+                const rowOffset = (y + ky) * width * 4;
+                for (let kx = -1; kx <= 1; kx++) {
+                    const idx = rowOffset + (x + kx) * 4;
+                    sum += copy[idx] * kernel[k++];
+                }
+            }
+
+            const idx = (y * width + x) * 4;
+            const v = Math.round(sum / kernelSum);
+
+            data[idx] = data[idx + 1] = data[idx + 2] = v;
+        }
+    }
+
+    return imageData;
+}
+
+/* ----------------------------------------------------------- */
+/* MEDIAN FILTER (excellent for salt-and-pepper noise)        */
+/* ----------------------------------------------------------- */
+
+export function medianFilter(imageData: ImageData): ImageData {
+    const { width, height, data } = imageData;
+    const copy = new Uint8ClampedArray(data);
+
+    for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+            const neighbors: number[] = [];
+
+            for (let ky = -1; ky <= 1; ky++) {
+                for (let kx = -1; kx <= 1; kx++) {
+                    const idx = ((y + ky) * width + (x + kx)) * 4;
+                    neighbors.push(copy[idx]);
+                }
+            }
+
+            neighbors.sort((a, b) => a - b);
+            const median = neighbors[4]; // middle value of 9 pixels
+
+            const idx = (y * width + x) * 4;
+            data[idx] = data[idx + 1] = data[idx + 2] = median;
+        }
+    }
+
+    return imageData;
+}
+
+/* ----------------------------------------------------------- */
 /* DECLARATIVE PREPROCESSOR LIST                                */
 /* ----------------------------------------------------------- */
 
 
 
 export const preprocessors: { name: string; fn: PreprocessFn }[] = [
-    { name: 'gamma+sharpen+contrast', fn: (img) =>
+    // Start with median filter for salt-and-pepper noise (different from Gaussian blur applied in CV)
+    { name: 'median+contrast', fn: (img) =>
             contrastStretch(
-                sharpen(
-                    gamma(img)
-                )
+                medianFilter(img)
             )
     },
+
+
+    { name: 'none', fn: (img) => img },
 
     { name: 'contrast', fn: (img) =>
             contrastStretch(img)
     },
 
-    { name: 'none', fn: (img) => img },
-
-
     { name: 'gamma+contrast', fn: (img) =>
             contrastStretch(
                 gamma(img)
+            )
+    },
+
+    { name: 'gamma+sharpen+contrast', fn: (img) =>
+            contrastStretch(
+                sharpen(
+                    gamma(img)
+                )
             )
     },
 
