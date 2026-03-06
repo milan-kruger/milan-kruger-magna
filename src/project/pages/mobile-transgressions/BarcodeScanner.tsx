@@ -58,7 +58,7 @@ function getROI(width: number, height: number) {
     if (isPortrait) {
         // For portrait: wider rectangle in the middle horizontally
         const roiWidth = 0.99;  // 80% of screen width
-        const roiHeight = 0.2; // 15% of screen height
+        const roiHeight = 0.15; // 15% of screen height
 
         return {
             x: (1 - roiWidth) / 2,      // Centered horizontally
