@@ -14,12 +14,10 @@ export function distance(
 
 export function orderPoints(points: { x: number; y: number }[]): { x: number; y: number }[] {
     if (!points || points.length < 4) {
-        console.warn('Not enough points for ordering', points);
         return points;
     }
 
     try {
-        // Calculate center point
         const center = points.reduce(
             (acc, p) => {
                 if (!p) return acc;
@@ -31,11 +29,9 @@ export function orderPoints(points: { x: number; y: number }[]): { x: number; y:
             { x: 0, y: 0 }
         );
 
-        // Filter out invalid points and add angle
         const validPoints = points.filter(p => p && typeof p.x === 'number' && typeof p.y === 'number');
 
         if (validPoints.length < 4) {
-            console.warn('Not enough valid points after filtering');
             return points;
         }
 
@@ -44,10 +40,8 @@ export function orderPoints(points: { x: number; y: number }[]): { x: number; y:
             angle: Math.atan2(p.y - center.y, p.x - center.x)
         }));
 
-        // Sort by angle
         withAngle.sort((a, b) => a.angle - b.angle);
 
-        // Reorder: top-left (smallest angle), top-right, bottom-right, bottom-left
         return [
             withAngle[0] || { x: 0, y: 0 },
             withAngle[1] || { x: 0, y: 0 },
@@ -55,8 +49,7 @@ export function orderPoints(points: { x: number; y: number }[]): { x: number; y:
             withAngle[3] || { x: 0, y: 0 }
         ].map(({ x, y }) => ({ x, y }));
 
-    } catch (error) {
-        console.error('Error ordering points:', error);
+    } catch {
         return points;
     }
 }
@@ -69,7 +62,6 @@ export function isBlurry(
     try {
         cv.Laplacian(grayMat, laplacian, cv.CV_64F);
 
-        // Compute mean and stddev
         const mean = new cv.Mat();
         const stddev = new cv.Mat();
         cv.meanStdDev(laplacian, mean, stddev);
@@ -85,63 +77,97 @@ export function isBlurry(
     }
 }
 
-
-export function perspectiveCorrect(
-    canvas: HTMLCanvasElement,
-    openCvReady: boolean,
-    maxWidthParameter : number
-): ImageData | null {
-    if (!openCvReady) return null;
-
-    // Create a copy of the canvas to work with
-    const src = cv.imread(canvas);
+export function stage1Preprocess(src: cv.Mat) {
     const gray = new cv.Mat();
-    const edges = new cv.Mat();
     const blurred = new cv.Mat();
+    const edges = new cv.Mat();
     const dilated = new cv.Mat();
-    const contours = new cv.MatVector();
-    const hierarchy = new cv.Mat();
-
-    // Declare variables that need to be accessible in cleanup
-    let maxContour: cv.Mat | null = null;
 
     try {
-        // -------- Stage 1: Scale-aware preprocessing --------
-        // All kernel / tile sizes are derived from the image width so that the
-        // same algorithm works correctly on both small (< 700 px) and large
-        // canvases without any manual tuning.
-        const imgW = src.cols;
-        const imgH = src.rows;
 
-        // Reference width used to define the "default" sizes below.
+        const imgW = src.cols;
+
         const REF_WIDTH = 1280;
         const scaleFactor = imgW / REF_WIDTH;
 
-        // Blur kernel: odd, minimum 3.  Larger on hi-res frames to suppress
-        // more noise; smaller on low-res frames so we don't over-smooth edges.
-        const blurSize = Math.max(3, Math.round((5 * scaleFactor) / 2) * 2 + 1); // always odd
-
-        // Dilation kernel: scales with resolution but stays at least 3×3.
-        // On small images a 5×5 dilation bridges the barcode border with the
-        // image border; a 3×3 (or even 2×2 equivalent) keeps them separate.
-        const dilateSize = Math.max(3, Math.round(5 * scaleFactor));
-
         cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
 
-        if (isBlurry(gray)) {
-            cleanup();
-            return null;
-        }
+        const blurry = isBlurry(gray);
 
-        cv.GaussianBlur(gray, blurred, new cv.Size(blurSize, blurSize), 0);
+        let blurSize = Math.round(5 * scaleFactor);
 
-        cv.Canny(blurred, edges, 30, 150, 3);
+        if (blurSize % 2 === 0) blurSize += 1;
 
-        const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(dilateSize, dilateSize));
-        cv.dilate(edges, dilated, kernel, new cv.Point(-1, -1), 2);
+        blurSize = Math.max(3, blurSize);
+        blurSize = Math.min(7, blurSize);
+
+        cv.GaussianBlur(
+            gray,
+            blurred,
+            new cv.Size(blurSize, blurSize),
+            0
+        );
+
+        const cannyLow = blurry ? 20 : 30;
+        const cannyHigh = blurry ? 120 : 150;
+
+        cv.Canny(
+            blurred,
+            edges,
+            cannyLow,
+            cannyHigh,
+            3
+        );
+
+        let dilateSize = Math.round(5 * scaleFactor);
+
+        dilateSize = Math.max(3, dilateSize);
+        dilateSize = Math.min(7, dilateSize);
+
+        const kernel = cv.getStructuringElement(
+            cv.MORPH_RECT,
+            new cv.Size(dilateSize, dilateSize)
+        );
+
+        cv.dilate(
+            edges,
+            dilated,
+            kernel,
+            new cv.Point(-1, -1),
+            2
+        );
+
         kernel.delete();
 
-        // Find contours on the dilated edges
+        return {
+            gray,
+            edges,
+            dilated,
+            blurry
+        };
+
+    } catch (error) {
+
+        gray.delete();
+        blurred.delete();
+        edges.delete();
+        dilated.delete();
+
+        throw error;
+    }
+}
+
+export function stage2FindBestContour(
+    dilated: cv.Mat
+): cv.Mat | null {
+    const contours = new cv.MatVector();
+    const hierarchy = new cv.Mat();
+
+    let bestContour: cv.Mat | null = null;
+    let bestScore = 0;
+
+    try {
+
         cv.findContours(
             dilated,
             contours,
@@ -151,108 +177,124 @@ export function perspectiveCorrect(
         );
 
         if (contours.size() === 0) {
-            console.error('No contours found');
-            cleanup();
+            contours.delete();
+            hierarchy.delete();
             return null;
         }
 
-        // -------- Stage 2: Contour finding — barcode-strip aspect ratio filter --------
-        const MIN_ASPECT = 2.5;
-        const MAX_ASPECT = 12.0;
+        const imageArea = dilated.rows * dilated.cols;
+        const minArea = imageArea * 0.03;
 
-        let maxArea = 0;
-        let maxPerimeter = 0;
-        const imageArea = imgW * imgH;
-        const minArea = imageArea * 0.05;
-        const maxAreaLimit = imageArea * 0.80; // reject whole-image / full-card boundary
         for (let i = 0; i < contours.size(); i++) {
+
             const cnt = contours.get(i);
+
             const area = cv.contourArea(cnt);
+            if (area < minArea) {
+                cnt.delete();
+                continue;
+            }
+
             const perimeter = cv.arcLength(cnt, true);
 
-            if (area < minArea) continue;
-            if (area > maxAreaLimit) continue; // reject whole-image / full-card boundary on the axis-aligned bounding rect before
-            // doing the more expensive approxPolyDP loop.
-            const br = cv.boundingRect(cnt);
-            if (br.height === 0) continue;
-            const aspect = br.width / br.height;
-            if (aspect < MIN_ASPECT || aspect > MAX_ASPECT) continue;
+            let bestApproxForContour: cv.Mat | null = null;
 
-            // Approximate contour to polygon with varying precision
             for (let epsilon = 0.01; epsilon <= 0.05; epsilon += 0.01) {
+
                 const approx = new cv.Mat();
-                cv.approxPolyDP(cnt, approx, epsilon * perimeter, true);
 
-                // Accept quadrilaterals (or near-quads with 5-6 corners)
-                if ((approx.rows === 4 || approx.rows === 5 || approx.rows === 6) &&
-                    area > maxArea &&
-                    perimeter > maxPerimeter) {
+                cv.approxPolyDP(
+                    cnt,
+                    approx,
+                    epsilon * perimeter,
+                    true
+                );
 
-                    maxArea = area;
-                    maxPerimeter = perimeter;
-                    if (maxContour) maxContour.delete();
-                    maxContour = approx.clone();
+                if (
+                    approx.rows === 4 ||
+                    approx.rows === 5 ||
+                    approx.rows === 6
+                ) {
+
+                    bestApproxForContour = approx.clone();
+                    approx.delete();
                     break;
+
                 }
 
                 approx.delete();
             }
-        }
 
-        // If no qualifying contour found, try a different approach
-        if (!maxContour) {
-            // Find the largest contour whose bounding-box aspect ratio still
-            // looks like a barcode strip (same MIN_ASPECT / MAX_ASPECT as above).
-            let largestContour: cv.Mat | null = null;
-            maxArea = 0;
-
-            for (let i = 0; i < contours.size(); i++) {
-                const cnt = contours.get(i);
-                const area = cv.contourArea(cnt);
-                if (area <= maxArea) continue;
-                if (area > maxAreaLimit) continue; // reject whole-image boundary
-
-                const br = cv.boundingRect(cnt);
-                const aspect = br.width / br.height;
-                if (aspect < MIN_ASPECT || aspect > MAX_ASPECT) continue;
-
-                maxArea = area;
-                if (largestContour) largestContour.delete();
-                largestContour = cnt.clone();
+            if (!bestApproxForContour) {
+                cnt.delete();
+                continue;
             }
 
-            if (largestContour) {
-                // Get the minimum area rectangle
-                const rect = cv.minAreaRect(largestContour);
-                // boxPoints returns an array of Point, not a Mat
-                const boxPoints = cv.boxPoints(rect);
+            const br = cv.boundingRect(cnt);
 
-                // Convert the box points array to a Mat
-                const boxMat = cv.matFromArray(4, 1, cv.CV_32FC2, [
-                    boxPoints[0].x, boxPoints[0].y,
-                    boxPoints[1].x, boxPoints[1].y,
-                    boxPoints[2].x, boxPoints[2].y,
-                    boxPoints[3].x, boxPoints[3].y
-                ]);
-
-                maxContour = boxMat;
-                largestContour.delete();
+            let aspect = 0;
+            if (br.height !== 0) {
+                aspect = br.width / br.height;
             }
+
+            let score = area;
+
+            if (aspect > 2 && aspect < 12) {
+                score *= 1.4;
+            }
+
+            if (bestApproxForContour.rows === 4) {
+                score *= 1.5;
+            }
+
+            if (score > bestScore) {
+
+                bestScore = score;
+
+                if (bestContour) {
+                    bestContour.delete();
+                }
+
+                bestContour = bestApproxForContour.clone();
+            }
+
+            bestApproxForContour.delete();
+            cnt.delete();
         }
 
-        if (!maxContour) {
-            console.error('No contour found for perspective correction');
-            cleanup();
-            return null;
+        contours.delete();
+        hierarchy.delete();
+
+        return bestContour;
+
+    } catch {
+
+        contours.delete();
+        hierarchy.delete();
+
+        if (bestContour) {
+            bestContour.delete();
         }
 
-        // -------- Stage 3: Extract and order the corner points --------
-        const points: { x: number; y: number }[] = [];
+        return null;
+    }
+}
 
-        // Check the type of matrix and extract points accordingly
-        if (maxContour.type() === cv.CV_32FC2 || maxContour.type() === cv.CV_32F) {
-            for (let i = 0; i < maxContour.rows; i++) {
-                const ptr = maxContour.floatPtr(i, 0);
+export function stage3ExtractCorners(
+    contour: cv.Mat
+): { x: number; y: number }[] | null {
+    const points: { x: number; y: number }[] = [];
+
+    try {
+
+        if (
+            contour.type() === cv.CV_32FC2 ||
+            contour.type() === cv.CV_32F
+        ) {
+            for (let i = 0; i < contour.rows; i++) {
+
+                const ptr = contour.floatPtr(i, 0);
+
                 if (ptr && ptr.length >= 2) {
                     points.push({
                         x: Math.round(ptr[0]),
@@ -260,9 +302,13 @@ export function perspectiveCorrect(
                     });
                 }
             }
+
         } else {
-            for (let i = 0; i < maxContour.rows; i++) {
-                const ptr = maxContour.intPtr(i, 0);
+
+            for (let i = 0; i < contour.rows; i++) {
+
+                const ptr = contour.intPtr(i, 0);
+
                 if (ptr && ptr.length >= 2) {
                     points.push({
                         x: ptr[0],
@@ -273,209 +319,316 @@ export function perspectiveCorrect(
         }
 
         if (points.length < 4) {
-            console.error('Not enough points extracted:', points.length);
-            cleanup();
             return null;
         }
 
-        // If we have more than 4 points, reduce to 4 corners
         if (points.length > 4) {
-            // Find convex hull first
-            const pointsMat = cv.matFromArray(points.length, 1, cv.CV_32SC2,
-                points.flatMap(p => [p.x, p.y]));
+
+            const pointsMat = cv.matFromArray(
+                points.length,
+                1,
+                cv.CV_32SC2,
+                points.flatMap(p => [p.x, p.y])
+            );
+
             const hull = new cv.Mat();
-            cv.convexHull(pointsMat, hull, false, true);
+
+            cv.convexHull(
+                pointsMat,
+                hull,
+                false,
+                true
+            );
 
             const hullPoints: { x: number; y: number }[] = [];
+
             for (let i = 0; i < hull.rows; i++) {
+
                 const ptr = hull.intPtr(i, 0);
+
                 if (ptr && ptr.length >= 2) {
-                    hullPoints.push({ x: ptr[0], y: ptr[1] });
+                    hullPoints.push({
+                        x: ptr[0],
+                        y: ptr[1]
+                    });
                 }
             }
+
             hull.delete();
             pointsMat.delete();
 
             if (hullPoints.length === 4) {
-                points.length = 0;
-                points.push(...hullPoints);
-            } else {
-                // Hull still has != 4 points — pick the point closest to each bounding-box corner
-                const src = hullPoints.length > 0 ? hullPoints : points;
-                const minX = Math.min(...src.map(p => p.x));
-                const maxX = Math.max(...src.map(p => p.x));
-                const minY = Math.min(...src.map(p => p.y));
-                const maxY = Math.max(...src.map(p => p.y));
-
-                const closest = (tx: number, ty: number) =>
-                    src.reduce((best, p) => {
-                        const d = Math.hypot(p.x - tx, p.y - ty);
-                        return d < best.d ? { p, d } : best;
-                    }, { p: src[0], d: Infinity }).p;
-
-                points.length = 0;
-                points.push(
-                    closest(minX, minY),
-                    closest(maxX, minY),
-                    closest(maxX, maxY),
-                    closest(minX, maxY)
-                );
+                return orderPoints(hullPoints);
             }
+
+            const src = hullPoints.length > 0
+                ? hullPoints
+                : points;
+
+            const minX = Math.min(...src.map(p => p.x));
+            const maxX = Math.max(...src.map(p => p.x));
+            const minY = Math.min(...src.map(p => p.y));
+            const maxY = Math.max(...src.map(p => p.y));
+
+            const closest = (tx: number, ty: number) =>
+                src.reduce((best, p) => {
+
+                    const d = Math.hypot(
+                        p.x - tx,
+                        p.y - ty
+                    );
+
+                    return d < best.d
+                        ? { p, d }
+                        : best;
+
+                }, { p: src[0], d: Infinity }).p;
+
+            const corners = [
+                closest(minX, minY),
+                closest(maxX, minY),
+                closest(maxX, maxY),
+                closest(minX, maxY)
+            ];
+
+            return orderPoints(corners);
         }
 
-        // Ensure we have exactly 4 points
-        if (points.length !== 4) {
-            console.error('Invalid number of points after processing:', points.length);
-            cleanup();
-            return null;
+        if (points.length === 4) {
+            return orderPoints(points);
         }
 
-        // Order points
-        const ordered = orderPoints(points);
+        return null;
 
-        // Validate ordered points
-        if (!ordered || ordered.length !== 4) {
-            console.error('Invalid ordered points');
-            cleanup();
-            return null;
-        }
+    } catch {
+        return null;
+    }
 
-        // Calculate destination dimensions
-        const width1 = distance(ordered[0], ordered[1]);
-        const width2 = distance(ordered[3], ordered[2]);
+}
+
+export function stage4PerspectiveWarp(
+    src: cv.Mat,
+    corners: { x: number; y: number }[]
+): cv.Mat | null {
+
+    if (!corners || corners.length !== 4) {
+        return null;
+    }
+
+    try {
+
+        const width1 = distance(corners[0], corners[1]);
+        const width2 = distance(corners[3], corners[2]);
+
         if (width1 === 0 || width2 === 0) {
-            console.error('Invalid width calculation');
-            cleanup();
             return null;
         }
 
-        const MAX_WIDTH = maxWidthParameter; // choose whatever you want
+        const maxWidth = Math.max(
+            Math.round(width1),
+            Math.round(width2)
+        );
 
-        const maxWidth = Math.max(Math.round(width1), Math.round(width2));
-        let targetWidth = Math.round(maxWidth * 1.2);
+        const height1 = distance(corners[0], corners[3]);
+        const height2 = distance(corners[1], corners[2]);
 
-        const height1 = distance(ordered[0], ordered[3]);
-        const height2 = distance(ordered[1], ordered[2]);
-        const maxHeight = Math.max(Math.round(height1), Math.round(height2));
-        let targetHeight = Math.round((maxHeight / maxWidth) * targetWidth);
+        const maxHeight = Math.max(
+            Math.round(height1),
+            Math.round(height2)
+        );
 
-        // Calculate padding based on resolution (10-50px scaled)
-        const paddingScale = Math.min(Math.max(imgW / REF_WIDTH, 0.5), 2.0);
-        const verticalPadding = Math.round(20 * paddingScale); // ~10-40px depending on resolution
-        const horizontalPadding = Math.round(15 * paddingScale); // ~7-30px depending on resolution
-
-        // Add padding to target dimensions
-        targetWidth += horizontalPadding * 2;
-        targetHeight += verticalPadding * 2;
-
-        // Clamp width while keeping aspect ratio
-        if (targetWidth > MAX_WIDTH) {
-            const scale = MAX_WIDTH / targetWidth;
-            targetWidth = MAX_WIDTH;
-            targetHeight = Math.round(targetHeight * scale);
+        if (maxWidth === 0 || maxHeight === 0) {
+            return null;
         }
 
-        // -------- Stage 4: Apply perspective transform --------
-        const srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
-            ordered[0].x, ordered[0].y,
-            ordered[1].x, ordered[1].y,
-            ordered[2].x, ordered[2].y,
-            ordered[3].x, ordered[3].y
-        ]);
+        const targetWidth = Math.round(maxWidth * 1.2);
+        const targetHeight = Math.round(
+            (maxHeight / maxWidth) * targetWidth
+        );
 
-        const dstTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
-            horizontalPadding, verticalPadding,
-            targetWidth - 1 - horizontalPadding, verticalPadding,
-            targetWidth - 1 - horizontalPadding, targetHeight - 1 - verticalPadding,
-            horizontalPadding, targetHeight - 1 - verticalPadding
-        ]);
+        const srcTri = cv.matFromArray(
+            4,
+            1,
+            cv.CV_32FC2,
+            [
+                corners[0].x, corners[0].y,
+                corners[1].x, corners[1].y,
+                corners[2].x, corners[2].y,
+                corners[3].x, corners[3].y
+            ]
+        );
 
-        const M = cv.getPerspectiveTransform(srcTri, dstTri);
+        const dstTri = cv.matFromArray(
+            4,
+            1,
+            cv.CV_32FC2,
+            [
+                0, 0,
+                targetWidth - 1, 0,
+                targetWidth - 1, targetHeight - 1,
+                0, targetHeight - 1
+            ]
+        );
+
+        const transform = cv.getPerspectiveTransform(
+            srcTri,
+            dstTri
+        );
+
         const warped = new cv.Mat();
 
         cv.warpPerspective(
             src,
             warped,
-            M,
+            transform,
             new cv.Size(targetWidth, targetHeight),
-            cv.INTER_LINEAR,
+            cv.INTER_CUBIC,
             cv.BORDER_CONSTANT,
             new cv.Scalar(255, 255, 255, 255)
         );
 
-        // -------- Stage 5: Post-processing — contrast normalisation --------
-        // Convert to grayscale
-        const warpedGray = new cv.Mat();
-        cv.cvtColor(warped, warpedGray, cv.COLOR_RGBA2GRAY);
+        srcTri.delete();
+        dstTri.delete();
+        transform.delete();
 
-        // CLAHE: adaptive histogram equalisation — pushes whites to 255 and
-        // blacks to 0 on a tile-by-tile basis, so both dark and bright
-        // lighting environments are handled correctly.
-        // Tile size scales with resolution: larger images get more tiles so
-        // local adaptation remains proportionally fine-grained.
-        const claheTileSize = Math.max(4, Math.round(8 * scaleFactor));
+        return warped;
+
+    } catch {
+
+        return null;
+    }
+}
+
+export function stage5Enhance(
+    warped: cv.Mat
+): ImageData | null {
+
+    const warpedGray = new cv.Mat();
+    const claheResult = new cv.Mat();
+    const sharpened = new cv.Mat();
+    const final = new cv.Mat();
+
+    try {
+
+        cv.cvtColor(
+            warped,
+            warpedGray,
+            cv.COLOR_RGBA2GRAY
+        );
+
         const clahe = new cv.CLAHE(
             2.0,
-            new cv.Size(claheTileSize, claheTileSize)
+            new cv.Size(8, 8)
         );
-        const claheOut = new cv.Mat();
-        clahe.apply(warpedGray, claheOut);
+
+        clahe.apply(
+            warpedGray,
+            claheResult
+        );
 
         clahe.delete();
 
-        // Linear stretch: map the darkest remaining pixel to 0 and the
-        // brightest to 255, so the output is always full-range.
-        cv.normalize(claheOut, claheOut, 0, 255, cv.NORM_MINMAX);
-
-        // Apply Gaussian blur to reduce high-frequency noise that causes checksum errors
-        // This is more efficient than running blur in multiple preprocessors
-        // Slight blur improves barcode decoding by smoothing sensor noise
-        const blurredOut = new cv.Mat();
-        cv.GaussianBlur(claheOut, blurredOut, new cv.Size(3, 3), 0, 0, cv.BORDER_DEFAULT);
-
-        const warpedRGBA = new cv.Mat();
-        cv.cvtColor(blurredOut, warpedRGBA, cv.COLOR_GRAY2RGBA);
-
-        const pixelData = new Uint8ClampedArray(warpedRGBA.data.length);
-        pixelData.set(warpedRGBA.data);
-
-        const imgData = new ImageData(
-            pixelData,
-            warpedRGBA.cols,
-            warpedRGBA.rows
+        const sharpKernel = cv.matFromArray(
+            3,
+            3,
+            cv.CV_32F,
+            [
+                0, -1, 0,
+                -1,  5, -1,
+                0, -1, 0
+            ]
         );
 
-        blurredOut.delete();
-        claheOut.delete();
-        warpedGray.delete();
-        warpedRGBA.delete();
+        cv.filter2D(
+            claheResult,
+            sharpened,
+            cv.CV_8U,
+            sharpKernel
+        );
 
-        // Clean up transform matrices
-        srcTri.delete();
-        dstTri.delete();
-        M.delete();
-        warped.delete();
+        sharpKernel.delete();
 
-        cleanup();
-        return imgData;
+        cv.adaptiveThreshold(
+            sharpened,
+            final,
+            255,
+            cv.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv.THRESH_BINARY,
+            15,
+            5
+        );
 
-    } catch (error) {
-        console.error('Perspective correction failed:', error);
-        cleanup();
+        const rgba = new cv.Mat();
+
+        cv.cvtColor(
+            final,
+            rgba,
+            cv.COLOR_GRAY2RGBA
+        );
+
+        const imageData = new ImageData(
+            new Uint8ClampedArray(rgba.data),
+            rgba.cols,
+            rgba.rows
+        );
+
+        rgba.delete();
+
+        return imageData;
+
+    } catch {
+
         return null;
+
+    } finally {
+
+        warpedGray.delete();
+        claheResult.delete();
+        sharpened.delete();
+        final.delete();
     }
+}
 
-    function cleanup() {
-        // Safely delete all matrices
-        [src, gray, edges, blurred, dilated, hierarchy].forEach(mat => {
-            if (mat && !mat.isDeleted()) mat.delete();
-        });
+export function perspectiveCorrect(
+    canvas: HTMLCanvasElement,
+    openCvReady: boolean
+): ImageData | null {
 
-        contours.delete();
+    if (!openCvReady) return null;
 
-        // Delete maxContour if it exists
-        if (maxContour && !maxContour.isDeleted()) {
-            maxContour.delete();
+    const src = cv.imread(canvas);
+
+    let stage1;
+    let contour: cv.Mat | null = null;
+    let warped: cv.Mat | null = null;
+
+    try {
+        stage1 = stage1Preprocess(src);
+
+        contour = stage2FindBestContour(stage1.dilated);
+        if (!contour) return null;
+
+        const corners = stage3ExtractCorners(contour);
+        if (!corners) return null;
+
+        warped = stage4PerspectiveWarp(src, corners);
+        if (!warped) return null;
+
+        const result = stage5Enhance(warped);
+        if (!result) return null;
+
+        return result;
+
+    } catch {
+        return null;
+    } finally {
+        src.delete();
+        if (stage1) {
+            stage1.gray.delete();
+            stage1.edges.delete();
+            stage1.dilated.delete();
         }
+        if (contour) contour.delete();
+        if (warped) warped.delete();
     }
 }

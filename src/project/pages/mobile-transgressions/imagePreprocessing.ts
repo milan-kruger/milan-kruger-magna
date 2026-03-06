@@ -14,48 +14,44 @@ export function cloneImageData(imageData: ImageData): ImageData {
 }
 
 /* ----------------------------------------------------------- */
-/* BRIGHTNESS NORMALIZATION (MANDATORY CHECK)                  */
+/* BRIGHTNESS NORMALIZATION                                    */
 /* ----------------------------------------------------------- */
 
-// export function normalizeBrightness(
-//     imageData: ImageData,
-//     minTargetBrightness = 128,  // Minimum desired average brightness
-//     maxAdjustment = 1.5         // Maximum multiplier to avoid over-amplification
-// ): ImageData {
-//     const { data } = imageData;
-//
-//     // Calculate global average brightness
-//     let sum = 0;
-//     let count = 0;
-//
-//     for (let i = 0; i < data.length; i += 4) {
-//         sum += data[i]; // Since it's grayscale, R=G=B
-//         count++;
-//     }
-//
-//     const avgBrightness = sum / count;
-//
-//     // If brightness is already above threshold, return unchanged
-//     if (avgBrightness >= minTargetBrightness) {
-//         return imageData;
-//     }
-//
-//     // Calculate adjustment factor, but cap it to avoid over-amplification
-//     const adjustment = Math.min(
-//         minTargetBrightness / avgBrightness,
-//         maxAdjustment
-//     );
-//
-//     // Apply brightness boost
-//     for (let i = 0; i < data.length; i += 4) {
-//         const boosted = Math.min(255, Math.round(data[i] * adjustment));
-//         data[i] = boosted;
-//         data[i + 1] = boosted;
-//         data[i + 2] = boosted;
-//     }
-//
-//     return imageData;
-// }
+export function normalizeBrightness(
+    imageData: ImageData,
+    minTargetBrightness = 128,
+    maxAdjustment = 1.5
+): ImageData {
+    const { data } = imageData;
+
+    let sum = 0;
+    let count = 0;
+
+    for (let i = 0; i < data.length; i += 4) {
+        sum += data[i];
+        count++;
+    }
+
+    const avgBrightness = sum / count;
+
+    if (avgBrightness >= minTargetBrightness) {
+        return imageData;
+    }
+
+    const adjustment = Math.min(
+        minTargetBrightness / avgBrightness,
+        maxAdjustment
+    );
+
+    for (let i = 0; i < data.length; i += 4) {
+        const boosted = Math.min(255, Math.round(data[i] * adjustment));
+        data[i] = boosted;
+        data[i + 1] = boosted;
+        data[i + 2] = boosted;
+    }
+
+    return imageData;
+}
 
 /* ----------------------------------------------------------- */
 /* BASIC GRAYSCALE                                              */
@@ -80,18 +76,16 @@ export function toGrayscale(imageData: ImageData): ImageData {
 /* CONTRAST STRETCH                                             */
 /* ----------------------------------------------------------- */
 
-
 export function contrastStretch(imageData: ImageData): ImageData {
     const { data } = imageData;
 
     let min = 255;
     let max = 0;
 
-    // Pass 1: find min/max
     for (let i = 0; i < data.length; i += 4) {
+        const lum =
+            (77 * data[i] + 150 * data[i + 1] + 29 * data[i + 2]) >> 8;
 
-        // this assumes the image is already grayscale, so we can just read the R channel for luminance
-        const lum = data[i]; // grayscale, no recompute
         if (lum < min) min = lum;
         if (lum > max) max = lum;
     }
@@ -100,12 +94,18 @@ export function contrastStretch(imageData: ImageData): ImageData {
 
     const scale = 255 / (max - min);
 
-    // Pass 2: stretch
     for (let i = 0; i < data.length; i += 4) {
-        const stretched = (data[i] - min) * scale;
-        const v = stretched < 0 ? 0 : stretched > 255 ? 255 : stretched;
+        const lum =
+            (77 * data[i] + 150 * data[i + 1] + 29 * data[i + 2]) >> 8;
 
-        data[i] = data[i + 1] = data[i + 2] = v;
+        const stretched = Math.max(
+            0,
+            Math.min(255, (lum - min) * scale)
+        );
+
+        data[i] = stretched;
+        data[i + 1] = stretched;
+        data[i + 2] = stretched;
     }
 
     return imageData;
@@ -134,7 +134,6 @@ export function adaptiveLocalContrastAndThreshold(
             const yEnd = Math.min(ty + tileSize, height);
             const xEnd = Math.min(tx + tileSize, width);
 
-            // Pass 1: collect stats
             for (let y = ty; y < yEnd; y++) {
                 for (let x = tx; x < xEnd; x++) {
                     const idx = (y * width + x) * 4;
@@ -152,7 +151,6 @@ export function adaptiveLocalContrastAndThreshold(
             const avg = sum / count;
             const scale = 255 / (max - min);
 
-            // Pass 2: apply local stretch (+ optional threshold)
             for (let y = ty; y < yEnd; y++) {
                 for (let x = tx; x < xEnd; x++) {
                     const idx = (y * width + x) * 4;
@@ -182,72 +180,6 @@ export function adaptiveLocalContrastAndThreshold(
     return imageData;
 }
 
-
-/* ----------------------------------------------------------- */
-/* SHARPEN                                                     */
-/* ----------------------------------------------------------- */
-
-
-export function sharpen(imageData: ImageData): ImageData {
-    const { width, height, data } = imageData;
-    const copy = new Uint8ClampedArray(data);
-
-    const kernel = [
-        0, -1, 0,
-        -1, 5, -1,
-        0, -1, 0
-    ];
-
-    for (let y = 1; y < height - 1; y++) {
-        for (let x = 1; x < width - 1; x++) {
-
-            let sum = 0;
-            let k = 0;
-
-            for (let ky = -1; ky <= 1; ky++) {
-                const rowOffset = (y + ky) * width * 4;
-                for (let kx = -1; kx <= 1; kx++) {
-                    const idx = rowOffset + (x + kx) * 4;
-                    sum += copy[idx] * kernel[k++];
-                }
-            }
-
-            const idx = (y * width + x) * 4;
-            const v = sum < 0 ? 0 : sum > 255 ? 255 : sum;
-
-            data[idx] = data[idx + 1] = data[idx + 2] = v;
-        }
-    }
-
-    return imageData;
-}
-
-/* ----------------------------------------------------------- */
-/* GAMMA CORRECTION                                            */
-/* ----------------------------------------------------------- */
-
-function buildGammaLUT(gamma: number) {
-    const inv = 1 / gamma;
-    const lut = new Uint8ClampedArray(256);
-    for (let i = 0; i < 256; i++) {
-        lut[i] = Math.pow(i / 255, inv) * 255;
-    }
-    return lut;
-}
-
-const gamma075LUT = buildGammaLUT(0.75);
-
-export function gamma(imageData: ImageData): ImageData {
-    const { data } = imageData;
-
-    for (let i = 0; i < data.length; i += 4) {
-        const v = gamma075LUT[data[i]];
-        data[i] = data[i+1] = data[i+2] = v;
-    }
-
-    return imageData;
-}
-
 /* ----------------------------------------------------------- */
 /* GAUSSIAN BLUR (for noise reduction)                         */
 /* ----------------------------------------------------------- */
@@ -256,7 +188,6 @@ export function gaussianBlur(imageData: ImageData): ImageData {
     const { width, height, data } = imageData;
     const copy = new Uint8ClampedArray(data);
 
-    // Simple 3x3 Gaussian kernel (approximation)
     const kernel = [
         1, 2, 1,
         2, 4, 2,
@@ -287,30 +218,38 @@ export function gaussianBlur(imageData: ImageData): ImageData {
     return imageData;
 }
 
+
 /* ----------------------------------------------------------- */
-/* MEDIAN FILTER (excellent for salt-and-pepper noise)        */
+/* SHARPEN                                                     */
 /* ----------------------------------------------------------- */
 
-export function medianFilter(imageData: ImageData): ImageData {
+
+export function sharpen(imageData: ImageData): ImageData {
     const { width, height, data } = imageData;
     const copy = new Uint8ClampedArray(data);
 
+    const kernel = [
+        0, -1, 0,
+        -1, 5, -1,
+        0, -1, 0
+    ];
+
     for (let y = 1; y < height - 1; y++) {
         for (let x = 1; x < width - 1; x++) {
-            const neighbors: number[] = [];
+            for (let c = 0; c < 3; c++) {
+                let sum = 0;
+                let k = 0;
 
-            for (let ky = -1; ky <= 1; ky++) {
-                for (let kx = -1; kx <= 1; kx++) {
-                    const idx = ((y + ky) * width + (x + kx)) * 4;
-                    neighbors.push(copy[idx]);
+                for (let ky = -1; ky <= 1; ky++) {
+                    for (let kx = -1; kx <= 1; kx++) {
+                        const idx = ((y + ky) * width + (x + kx)) * 4 + c;
+                        sum += copy[idx] * kernel[k++];
+                    }
                 }
+
+                const idx = (y * width + x) * 4 + c;
+                data[idx] = Math.max(0, Math.min(255, sum));
             }
-
-            neighbors.sort((a, b) => a - b);
-            const median = neighbors[4]; // middle value of 9 pixels
-
-            const idx = (y * width + x) * 4;
-            data[idx] = data[idx + 1] = data[idx + 2] = median;
         }
     }
 
@@ -318,19 +257,27 @@ export function medianFilter(imageData: ImageData): ImageData {
 }
 
 /* ----------------------------------------------------------- */
-/* DECLARATIVE PREPROCESSOR LIST                                */
+/* GAMMA CORRECTION                                            */
 /* ----------------------------------------------------------- */
 
 
+export function gamma(imageData: ImageData, gamma = 0.7): ImageData {
+    const { data } = imageData;
+    const inv = 1 / gamma;
+
+    for (let i = 0; i < data.length; i += 4) {
+        const v = data[i] / 255;
+        const corrected = Math.pow(v, inv) * 255;
+        data[i] = data[i+1] = data[i+2] = corrected;
+    }
+    return imageData;
+}
+
+/* ----------------------------------------------------------- */
+/* DECLARATIVE PREPROCESSOR LIST                                */
+/* ----------------------------------------------------------- */
 
 export const preprocessors: { name: string; fn: PreprocessFn }[] = [
-    // Start with median filter for salt-and-pepper noise (different from Gaussian blur applied in CV)
-    { name: 'median+contrast', fn: (img) =>
-            contrastStretch(
-                medianFilter(img)
-            )
-    },
-
     { name: 'none', fn: (img) => img },
 
     { name: 'contrast', fn: (img) =>
@@ -339,14 +286,20 @@ export const preprocessors: { name: string; fn: PreprocessFn }[] = [
 
     { name: 'gamma+contrast', fn: (img) =>
             contrastStretch(
-                gamma(img)
+                gamma(
+                    img,
+                    0.75
+                )
             )
     },
 
     { name: 'gamma+sharpen+contrast', fn: (img) =>
             contrastStretch(
                 sharpen(
-                    gamma(img)
+                    gamma(
+                        img,
+                        0.75
+                    )
                 )
             )
     },
@@ -374,16 +327,6 @@ export const preprocessors: { name: string; fn: PreprocessFn }[] = [
                 false
             )
     },
-
-    { name: 'gamma+sharpen+contrast+gaussian', fn: (img) =>
-            contrastStretch(
-                sharpen(
-                    gamma(
-                        gaussianBlur(img)
-                    )
-                )
-            )
-    },
 ];
 
 
@@ -396,5 +339,4 @@ export function imageDataToBase64(imageData: ImageData): string {
     ctx.putImageData(imageData, 0, 0);
 
     return canvas.toDataURL('image/png');
-    // returns: "data:image/png;base64,iVBORw0KGgoAAAANS..."
 }

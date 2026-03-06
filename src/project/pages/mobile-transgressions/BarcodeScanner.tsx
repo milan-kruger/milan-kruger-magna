@@ -263,9 +263,6 @@ function BarcodeScanner() {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
 
-            const MAX_DECODE_WIDTH = videoRef.current.videoHeight > videoRef.current.videoWidth ?
-                videoRef.current.videoWidth * 0.9 : videoRef.current.videoWidth * 0.7;
-
             const TARGET_FPS = 6;
             const FRAME_INTERVAL = 1000 / TARGET_FPS;
 
@@ -326,7 +323,7 @@ function BarcodeScanner() {
                     // Perspective correction can help with angled barcodes but is expensive, so we only do it when OpenCV is available and skip it on fallback attempts.
                     // This naturally means frame is always grayscale when passed to ZXing, which is a nice optimization since ZXing doesn't care about color and it saves us from having to convert back and forth for OpenCV.
                     if (openCvReady) {
-                        const corrected = perspectiveCorrect(canvas, openCvReady, MAX_DECODE_WIDTH);
+                        const corrected = perspectiveCorrect(canvas, openCvReady);
                         if (corrected) {
                             frame = corrected; // already grayscale
                         }
