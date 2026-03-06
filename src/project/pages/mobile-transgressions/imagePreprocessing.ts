@@ -331,7 +331,6 @@ export const preprocessors: { name: string; fn: PreprocessFn }[] = [
             )
     },
 
-
     { name: 'none', fn: (img) => img },
 
     { name: 'contrast', fn: (img) =>
@@ -373,6 +372,16 @@ export const preprocessors: { name: string; fn: PreprocessFn }[] = [
                 img,
                 32,
                 false
+            )
+    },
+
+    { name: 'gamma+sharpen+contrast+gaussian', fn: (img) =>
+            contrastStretch(
+                sharpen(
+                    gamma(
+                        gaussianBlur(img)
+                    )
+                )
             )
     },
 ];
