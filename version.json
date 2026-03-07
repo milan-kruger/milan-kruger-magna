@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "b533e326abdc41c6a1bdb88816ae8d60d7bd71bd",
-        "shortHash": "b533e32",
-        "message": "Made image resize to 500px, might need to be bigger but still working",
-        "date": "2026-03-07T18:21:20+02:00"
+        "latestCommit": "3144428147ac398ce1a45794ee723c7f51079d6e",
+        "shortHash": "3144428",
+        "message": "Added in a normalize brighness before edge finding for reliability and optimized image preprocessing",
+        "date": "2026-03-07T21:13:17+02:00"
     }
 }
