@@ -586,7 +586,7 @@ export function perspectiveCorrect(
     let warped: cv.Mat | null = null;
 
     try {
-        const DETECT_WIDTH = 960;
+        const DETECT_WIDTH = 500;
 
         let detectMat = src;
         let scale = 1;
