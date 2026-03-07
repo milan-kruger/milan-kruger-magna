@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "45f2793da0b04b991db6ce0c355ffb336e7432d1",
-        "shortHash": "45f2793",
-        "message": "MAJOR FIX for speed and reliability , default to this if breaks , I hope this is the net",
-        "date": "2026-03-07T03:07:06+02:00"
+        "latestCommit": "5d888cbeac75e8d238b6da1fe548ba5858a0495a",
+        "shortHash": "5d888cb",
+        "message": "Made images resize for region detection ,but still use original source for warp for speed",
+        "date": "2026-03-07T18:11:40+02:00"
     }
 }
