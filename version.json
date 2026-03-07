@@ -2,9 +2,9 @@
     "version": "3.0.2-SNAPSHOT",
     "git": {
         "branch": "main",
-        "latestCommit": "154d58b36b31c1110da5cd3360f6cd9b2e4c3e3b",
-        "shortHash": "154d58b",
-        "message": "Updated stuff",
-        "date": "2026-03-07T01:36:27+02:00"
+        "latestCommit": "45f2793da0b04b991db6ce0c355ffb336e7432d1",
+        "shortHash": "45f2793",
+        "message": "MAJOR FIX for speed and reliability , default to this if breaks , I hope this is the net",
+        "date": "2026-03-07T03:07:06+02:00"
     }
 }
