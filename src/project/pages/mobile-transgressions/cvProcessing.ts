@@ -483,7 +483,7 @@ export function stage4PerspectiveWarp(
             dstTri
         );
 
-        const warped = new cv.Mat();
+        const warped = new cv.Mat(targetHeight, targetWidth, src.type());
 
         cv.warpPerspective(
             src,
@@ -586,24 +586,65 @@ export function perspectiveCorrect(
     let warped: cv.Mat | null = null;
 
     try {
+        const DETECT_WIDTH = 960;
+
+        let detectMat = src;
+        let scale = 1;
+
+        if (src.cols > DETECT_WIDTH) {
+
+            scale = DETECT_WIDTH / src.cols;
+
+            detectMat = new cv.Mat();
+
+            cv.resize(
+                src,
+                detectMat,
+                new cv.Size(
+                    Math.round(src.cols * scale),
+                    Math.round(src.rows * scale)
+                ),
+                0,
+                0,
+                cv.INTER_AREA
+            );
+        }
+
         const t0 = performance.now();
-        stage1 = stage1Preprocess(src);
+        stage1 = stage1Preprocess(detectMat);
+
+        debugMat("stage 1 Gray: " , stage1.gray);
+        debugMat("stage 1 Edges: " , stage1.edges);
+        debugMat("stage 1 Dilated: " , stage1.dilated);
 
         const t1 = performance.now();
         contour = stage2FindBestContour(stage1.dilated);
         if (!contour) return null;
 
         const t2 = performance.now();
-        const corners = stage3ExtractCorners(contour);
+        let corners = stage3ExtractCorners(contour);
         if (!corners) return null;
+
+        if (scale !== 1) {
+            const invScale = 1 / scale;
+
+            corners = corners.map(p => ({
+                x: p.x * invScale,
+                y: p.y * invScale
+            }));
+        }
 
         const t3 = performance.now();
         warped = stage4PerspectiveWarp(src, corners);
         if (!warped) return null;
 
+        debugMat("Stage 4 Warped: " , warped);
+
         const t4 = performance.now();
         const result = stage5Enhance(warped);
         if (!result) return null;
+
+        console.log("Stage 5 Enhanced: " , imageDataToBase64(result));
 
         const t5 = performance.now();
         console.log(
@@ -629,47 +670,47 @@ export function perspectiveCorrect(
         if (warped) warped.delete();
     }
 }
-//
-// function debugMat(label: string, mat: cv.Mat) {
-//     try {
-//         const base64 = imageDataToBase64(matToImageData(mat));
-//         //console.log(label, base64);
-//     } catch (e) {
-//         //console.log(label, "debug failed", e);
-//     }
-// }
-//
-//
-// function matToImageData(mat: cv.Mat): ImageData {
-//     const rgba = new cv.Mat();
-//
-//     if (mat.channels() === 1) {
-//         cv.cvtColor(mat, rgba, cv.COLOR_GRAY2RGBA);
-//     } else if (mat.channels() === 3) {
-//         cv.cvtColor(mat, rgba, cv.COLOR_RGB2RGBA);
-//     } else {
-//         mat.copyTo(rgba);
-//     }
-//
-//     const imgData = new ImageData(
-//         new Uint8ClampedArray(rgba.data),
-//         rgba.cols,
-//         rgba.rows
-//     );
-//
-//     rgba.delete();
-//     return imgData;
-// }
-//
-// export function imageDataToBase64(imageData: ImageData): string {
-//     const canvas = document.createElement("canvas");
-//     canvas.width = imageData.width;
-//     canvas.height = imageData.height;
-//
-//     const ctx = canvas.getContext("2d");
-//     if (!ctx) throw new Error("Could not get canvas context");
-//
-//     ctx.putImageData(imageData, 0, 0);
-//
-//     return canvas.toDataURL("image/png"); // returns base64 data URL
-// }
+
+function debugMat(label: string, mat: cv.Mat) {
+    try {
+        const base64 = imageDataToBase64(matToImageData(mat));
+        console.log(label, base64);
+    } catch (e) {
+        console.log(label, "debug failed", e);
+    }
+}
+
+
+function matToImageData(mat: cv.Mat): ImageData {
+    const rgba = new cv.Mat();
+
+    if (mat.channels() === 1) {
+        cv.cvtColor(mat, rgba, cv.COLOR_GRAY2RGBA);
+    } else if (mat.channels() === 3) {
+        cv.cvtColor(mat, rgba, cv.COLOR_RGB2RGBA);
+    } else {
+        mat.copyTo(rgba);
+    }
+
+    const imgData = new ImageData(
+        new Uint8ClampedArray(rgba.data),
+        rgba.cols,
+        rgba.rows
+    );
+
+    rgba.delete();
+    return imgData;
+}
+
+export function imageDataToBase64(imageData: ImageData): string {
+    const canvas = document.createElement("canvas");
+    canvas.width = imageData.width;
+    canvas.height = imageData.height;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Could not get canvas context");
+
+    ctx.putImageData(imageData, 0, 0);
+
+    return canvas.toDataURL("image/png"); // returns base64 data URL
+}
