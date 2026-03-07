@@ -11,7 +11,7 @@ import {
     type ParsedField
 } from './dlBarcodeParser';
 import { parseCarDiskBarcode, isCarDiskBarcode } from './carDiskBarcodeParser';
-import {cloneImageData, preprocessors} from './imagePreprocessing';
+import {cloneImageData, normalizeBrightness, preprocessors} from './imagePreprocessing';
 import { perspectiveCorrect, OpenCVModule } from './cvProcessing';
 import cv from "@techstark/opencv-js";
 
@@ -35,7 +35,7 @@ const wasmReaderOptions: ReaderOptions = {
     tryHarder: true,
     tryRotate: true,
     tryDownscale: true,
-    tryDenoise: true,       // Enable denoising to reduce checksum errors from image noise
+    tryDenoise: false,       // Enable denoising to reduce checksum errors from image noise
     maxNumberOfSymbols: 1,
     textMode: 'Plain',
     binarizer: 'LocalAverage',
@@ -111,7 +111,7 @@ async function tryDecodeSingle(
 
     const { name, fn } = preprocessors[preprocessorIndex];
 
-    const imageData = cloneImageData(originalImageData);
+    const imageData = normalizeBrightness(cloneImageData(originalImageData));
 
     try {
         fn(imageData);
@@ -122,12 +122,15 @@ async function tryDecodeSingle(
     let results = await readBarcodes(imageData, wasmReaderOptions);
 
     if (results.length > 0 && results[0].isValid && results[0].text) {
+        // console.log(`Decoded with preprocessor "${name}" and binarizer "LocalAverage"`);
+        // console.log(imageDataToBase64(imageData));
         return {
             text: results[0].text,
             format: results[0].format,
             preprocessor: name,
             binarizer: 'LocalAverage'
         };
+
     }
 
     // Try fallback binarizer for preprocessors that benefit from alternative binarization
@@ -136,6 +139,8 @@ async function tryDecodeSingle(
         results = await readBarcodes(imageData, wasmReaderOptionsFallback);
 
         if (results.length > 0 && results[0].isValid && results[0].text) {
+            // console.log(`Decoded with preprocessor "${name}" and binarizer "GlobalHistogram"`);
+            // console.log(imageDataToBase64(imageData));
             return {
                 text: results[0].text,
                 format: results[0].format,
@@ -165,18 +170,18 @@ async function tryDecodeAllPreprocessors(
     return null;
 }
 
-function imageDataToBase64(imageData: ImageData): string {
-    const canvas = document.createElement("canvas");
-    canvas.width = imageData.width;
-    canvas.height = imageData.height;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("Could not get canvas context");
-
-    ctx.putImageData(imageData, 0, 0);
-
-    return canvas.toDataURL("image/png"); // returns base64 data URL
-}
+// function imageDataToBase64(imageData: ImageData): string {
+//     const canvas = document.createElement("canvas");
+//     canvas.width = imageData.width;
+//     canvas.height = imageData.height;
+//
+//     const ctx = canvas.getContext("2d");
+//     if (!ctx) throw new Error("Could not get canvas context");
+//
+//     ctx.putImageData(imageData, 0, 0);
+//
+//     return canvas.toDataURL("image/png"); // returns base64 data URL
+// }
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -322,6 +327,8 @@ function BarcodeScanner() {
                     // Do perspective correction if OpenCV is ready, otherwise just grayscale.
                     // Perspective correction can help with angled barcodes but is expensive, so we only do it when OpenCV is available and skip it on fallback attempts.
                     // This naturally means frame is always grayscale when passed to ZXing, which is a nice optimization since ZXing doesn't care about color and it saves us from having to convert back and forth for OpenCV.
+
+                    const t0 = performance.now();
                     if (openCvReady) {
                         const corrected = perspectiveCorrect(canvas, openCvReady);
                         if (corrected) {
@@ -331,13 +338,17 @@ function BarcodeScanner() {
                             return scanTimerRef.current = globalThis.setTimeout(scan, FRAME_INTERVAL);
                         }
                     }
-                    console.log(imageDataToBase64(frame));
+                    const t1 = performance.now();
+                    console.log(`Perspective correction took ${Math.round(t1 - t0)} ms`);
 
                     // Run all preprocessors on this frame's (CV-corrected) output.
                     // Since CV already does the heavy lifting, it's worth trying every
                     // preprocessor now rather than cycling one per frame — we get a
                     // result on the very first frame that would have decoded at all.
                     decoded = await tryDecodeAllPreprocessors(frame);
+
+                    const t2 = performance.now();
+                    console.log(`Decoding with all preprocessors took ${Math.round(t2 - t1)} ms`);
 
                 } catch {
                     // no barcode detected this frame

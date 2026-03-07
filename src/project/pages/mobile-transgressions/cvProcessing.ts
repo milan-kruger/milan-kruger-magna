@@ -9,7 +9,10 @@ export function distance(
     b: { x: number; y: number }
 ) {
     if (!a || !b) return 0;
-    return Math.hypot(a.x - b.x, a.y - b.y);
+
+    const dx = a.x - b.x;
+    const dy = a.y - b.y;
+    return Math.sqrt(dx * dx + dy * dy);
 }
 
 export function orderPoints(points: { x: number; y: number }[]): { x: number; y: number }[] {
@@ -92,8 +95,6 @@ export function stage1Preprocess(src: cv.Mat) {
 
         cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
 
-        const blurry = isBlurry(gray);
-
         let blurSize = Math.round(5 * scaleFactor);
 
         if (blurSize % 2 === 0) blurSize += 1;
@@ -108,8 +109,8 @@ export function stage1Preprocess(src: cv.Mat) {
             0
         );
 
-        const cannyLow = blurry ? 20 : 30;
-        const cannyHigh = blurry ? 120 : 150;
+        const cannyLow = 30;
+        const cannyHigh = 150;
 
         cv.Canny(
             blurred,
@@ -142,8 +143,7 @@ export function stage1Preprocess(src: cv.Mat) {
         return {
             gray,
             edges,
-            dilated,
-            blurry
+            dilated
         };
 
     } catch (error) {
@@ -373,10 +373,9 @@ export function stage3ExtractCorners(
             const closest = (tx: number, ty: number) =>
                 src.reduce((best, p) => {
 
-                    const d = Math.hypot(
-                        p.x - tx,
-                        p.y - ty
-                    );
+                    const dx = p.x - tx;
+                    const dy = p.y - ty;
+                    const d = Math.sqrt(dx * dx + dy * dy);
 
                     return d < best.d
                         ? { p, d }
@@ -441,7 +440,16 @@ export function stage4PerspectiveWarp(
             return null;
         }
 
-        const targetWidth = Math.round(maxWidth * 1.2);
+        const MAX_WARP_WIDTH = 1200;
+
+        const rawWidth = Math.round(maxWidth * 1.2);
+
+        const scale =
+            rawWidth > MAX_WARP_WIDTH
+                ? MAX_WARP_WIDTH / rawWidth
+                : 1;
+
+        const targetWidth = Math.round(rawWidth * scale);
         const targetHeight = Math.round(
             (maxHeight / maxWidth) * targetWidth
         );
@@ -482,7 +490,7 @@ export function stage4PerspectiveWarp(
             warped,
             transform,
             new cv.Size(targetWidth, targetHeight),
-            cv.INTER_CUBIC,
+            cv.INTER_LINEAR,
             cv.BORDER_CONSTANT,
             new cv.Scalar(255, 255, 255, 255)
         );
@@ -503,39 +511,29 @@ export function stage5Enhance(
     warped: cv.Mat
 ): ImageData | null {
 
-    const warpedGray = new cv.Mat();
+    const gray = new cv.Mat();
     const claheResult = new cv.Mat();
     const sharpened = new cv.Mat();
-    const final = new cv.Mat();
 
     try {
-
-        cv.cvtColor(
-            warped,
-            warpedGray,
-            cv.COLOR_RGBA2GRAY
-        );
+        cv.cvtColor(warped, gray, cv.COLOR_RGBA2GRAY);
 
         const clahe = new cv.CLAHE(
-            2.0,
+            1.2,
             new cv.Size(8, 8)
         );
 
-        clahe.apply(
-            warpedGray,
-            claheResult
-        );
-
+        clahe.apply(gray, claheResult);
         clahe.delete();
 
-        const sharpKernel = cv.matFromArray(
+        const kernel = cv.matFromArray(
             3,
             3,
             cv.CV_32F,
             [
-                0, -1, 0,
-                -1,  5, -1,
-                0, -1, 0
+                0, -0.25, 0,
+                -0.25, 2, -0.25,
+                0, -0.25, 0
             ]
         );
 
@@ -543,28 +541,13 @@ export function stage5Enhance(
             claheResult,
             sharpened,
             cv.CV_8U,
-            sharpKernel
+            kernel
         );
 
-        sharpKernel.delete();
-
-        cv.adaptiveThreshold(
-            sharpened,
-            final,
-            255,
-            cv.ADAPTIVE_THRESH_GAUSSIAN_C,
-            cv.THRESH_BINARY,
-            15,
-            5
-        );
+        kernel.delete();
 
         const rgba = new cv.Mat();
-
-        cv.cvtColor(
-            final,
-            rgba,
-            cv.COLOR_GRAY2RGBA
-        );
+        cv.cvtColor(sharpened, rgba, cv.COLOR_GRAY2RGBA);
 
         const imageData = new ImageData(
             new Uint8ClampedArray(rgba.data),
@@ -576,16 +559,16 @@ export function stage5Enhance(
 
         return imageData;
 
-    } catch {
+    } catch (e) {
 
+        console.error("Stage5Enhance error", e);
         return null;
 
     } finally {
 
-        warpedGray.delete();
+        gray.delete();
         claheResult.delete();
         sharpened.delete();
-        final.delete();
     }
 }
 
@@ -603,19 +586,33 @@ export function perspectiveCorrect(
     let warped: cv.Mat | null = null;
 
     try {
+        const t0 = performance.now();
         stage1 = stage1Preprocess(src);
 
+        const t1 = performance.now();
         contour = stage2FindBestContour(stage1.dilated);
         if (!contour) return null;
 
+        const t2 = performance.now();
         const corners = stage3ExtractCorners(contour);
         if (!corners) return null;
 
+        const t3 = performance.now();
         warped = stage4PerspectiveWarp(src, corners);
         if (!warped) return null;
 
+        const t4 = performance.now();
         const result = stage5Enhance(warped);
         if (!result) return null;
+
+        const t5 = performance.now();
+        console.log(
+            `Timings: stage1=${(t1 - t0).toFixed(2)}ms, ` +
+            `stage2=${(t2 - t1).toFixed(2)}ms, ` +
+            `stage3=${(t3 - t2).toFixed(2)}ms, ` +
+            `stage4=${(t4 - t3).toFixed(2)}ms, ` +
+            `stage5=${(t5 - t4).toFixed(2)}ms`
+        );
 
         return result;
 
@@ -632,3 +629,47 @@ export function perspectiveCorrect(
         if (warped) warped.delete();
     }
 }
+//
+// function debugMat(label: string, mat: cv.Mat) {
+//     try {
+//         const base64 = imageDataToBase64(matToImageData(mat));
+//         //console.log(label, base64);
+//     } catch (e) {
+//         //console.log(label, "debug failed", e);
+//     }
+// }
+//
+//
+// function matToImageData(mat: cv.Mat): ImageData {
+//     const rgba = new cv.Mat();
+//
+//     if (mat.channels() === 1) {
+//         cv.cvtColor(mat, rgba, cv.COLOR_GRAY2RGBA);
+//     } else if (mat.channels() === 3) {
+//         cv.cvtColor(mat, rgba, cv.COLOR_RGB2RGBA);
+//     } else {
+//         mat.copyTo(rgba);
+//     }
+//
+//     const imgData = new ImageData(
+//         new Uint8ClampedArray(rgba.data),
+//         rgba.cols,
+//         rgba.rows
+//     );
+//
+//     rgba.delete();
+//     return imgData;
+// }
+//
+// export function imageDataToBase64(imageData: ImageData): string {
+//     const canvas = document.createElement("canvas");
+//     canvas.width = imageData.width;
+//     canvas.height = imageData.height;
+//
+//     const ctx = canvas.getContext("2d");
+//     if (!ctx) throw new Error("Could not get canvas context");
+//
+//     ctx.putImageData(imageData, 0, 0);
+//
+//     return canvas.toDataURL("image/png"); // returns base64 data URL
+// }
