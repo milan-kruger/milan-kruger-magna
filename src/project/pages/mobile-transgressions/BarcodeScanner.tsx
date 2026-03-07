@@ -105,16 +105,17 @@ type DecodeSuccess = {
 
 /** Try decoding with primary binarizer, then fallback binarizer. */
 async function tryDecodeSingle(
-    originalImageData: ImageData,
+    imageData: ImageData,
     preprocessorIndex: number
 ): Promise<DecodeSuccess | null> {
 
     const { name, fn } = preprocessors[preprocessorIndex];
 
-    const imageData = normalizeBrightness(cloneImageData(originalImageData));
-
     try {
+        const t0 = performance.now();
         fn(imageData);
+        const t1 = performance.now();
+        console.log(`Preprocessor "${name}" took ${Math.round(t1 - t0)} ms`);
     } catch {
         return null;
     }
@@ -122,8 +123,6 @@ async function tryDecodeSingle(
     let results = await readBarcodes(imageData, wasmReaderOptions);
 
     if (results.length > 0 && results[0].isValid && results[0].text) {
-        // console.log(`Decoded with preprocessor "${name}" and binarizer "LocalAverage"`);
-        // console.log(imageDataToBase64(imageData));
         return {
             text: results[0].text,
             format: results[0].format,
@@ -135,12 +134,10 @@ async function tryDecodeSingle(
 
     // Try fallback binarizer for preprocessors that benefit from alternative binarization
     // Especially useful for noise-reducing preprocessors (median) and basic ones (none, contrast)
-    if (name === 'none' || name === 'contrast' || name.includes('median')) {
+    if (name === 'none' || name === 'contrast') {
         results = await readBarcodes(imageData, wasmReaderOptionsFallback);
 
         if (results.length > 0 && results[0].isValid && results[0].text) {
-            // console.log(`Decoded with preprocessor "${name}" and binarizer "GlobalHistogram"`);
-            // console.log(imageDataToBase64(imageData));
             return {
                 text: results[0].text,
                 format: results[0].format,
@@ -163,8 +160,12 @@ async function tryDecodeSingle(
 async function tryDecodeAllPreprocessors(
     correctedFrame: ImageData
 ): Promise<DecodeSuccess | null> {
+
+    const base = normalizeBrightness(cloneImageData(correctedFrame));
+
     for (let i = 0; i < preprocessors.length; i++) {
-        const result = await tryDecodeSingle(correctedFrame, i);
+        const imageData = cloneImageData(base);
+        const result = await tryDecodeSingle(imageData, i);
         if (result) return result;
     }
     return null;

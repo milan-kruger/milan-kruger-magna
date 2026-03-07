@@ -12,7 +12,7 @@ export function distance(
 
     const dx = a.x - b.x;
     const dy = a.y - b.y;
-    return Math.sqrt(dx * dx + dy * dy);
+    return Math.hypot(dx, dy);
 }
 
 export function orderPoints(points: { x: number; y: number }[]): { x: number; y: number }[] {
@@ -57,58 +57,55 @@ export function orderPoints(points: { x: number; y: number }[]): { x: number; y:
     }
 }
 
-export function isBlurry(
-    grayMat: cv.Mat,
-    threshold: number = 80
-): boolean {
-    const laplacian = new cv.Mat();
-    try {
-        cv.Laplacian(grayMat, laplacian, cv.CV_64F);
+export function normalizeBrightnessMat(gray: cv.Mat): cv.Mat {
 
-        const mean = new cv.Mat();
-        const stddev = new cv.Mat();
-        cv.meanStdDev(laplacian, mean, stddev);
+    const result = new cv.Mat();
 
-        const variance = Math.pow(stddev.doubleAt(0, 0), 2);
+    const clahe = new cv.CLAHE(
+        2.0,                // clip limit
+        new cv.Size(8, 8)   // tile grid
+    );
 
-        mean.delete();
-        stddev.delete();
+    clahe.apply(gray, result);
 
-        return variance < threshold;
-    } finally {
-        laplacian.delete();
-    }
+    clahe.delete();
+
+    return result;
 }
 
 export function stage1Preprocess(src: cv.Mat) {
     const gray = new cv.Mat();
+    const normalized = new cv.Mat();  // New mat for normalized image
     const blurred = new cv.Mat();
     const edges = new cv.Mat();
     const dilated = new cv.Mat();
 
     try {
-
         const imgW = src.cols;
-
         const REF_WIDTH = 1280;
         const scaleFactor = imgW / REF_WIDTH;
 
+        // Step 1: Convert to grayscale
         cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
 
+        // Step 2: Normalize brightness using CLAHE
+        // This helps with uneven lighting and improves edge detection
+        const normalized = normalizeBrightnessMat(gray);
+
+        // Step 3: Apply Gaussian blur
         let blurSize = Math.round(5 * scaleFactor);
-
         if (blurSize % 2 === 0) blurSize += 1;
-
         blurSize = Math.max(3, blurSize);
         blurSize = Math.min(7, blurSize);
 
         cv.GaussianBlur(
-            gray,
+            normalized,  // Use normalized image instead of gray
             blurred,
             new cv.Size(blurSize, blurSize),
             0
         );
 
+        // Step 4: Edge detection
         const cannyLow = 30;
         const cannyHigh = 150;
 
@@ -120,8 +117,8 @@ export function stage1Preprocess(src: cv.Mat) {
             3
         );
 
+        // Step 5: Dilate to close gaps
         let dilateSize = Math.round(5 * scaleFactor);
-
         dilateSize = Math.max(3, dilateSize);
         dilateSize = Math.min(7, dilateSize);
 
@@ -140,15 +137,18 @@ export function stage1Preprocess(src: cv.Mat) {
 
         kernel.delete();
 
+        // Return all mats including normalized for proper cleanup
         return {
             gray,
+            normalized,  // Return normalized for debugging
             edges,
             dilated
         };
 
     } catch (error) {
-
+        // Clean up all mats
         gray.delete();
+        normalized.delete();
         blurred.delete();
         edges.delete();
         dilated.delete();
@@ -613,13 +613,15 @@ export function perspectiveCorrect(
         const t0 = performance.now();
         stage1 = stage1Preprocess(detectMat);
 
-        debugMat("stage 1 Gray: " , stage1.gray);
-        debugMat("stage 1 Edges: " , stage1.edges);
-        debugMat("stage 1 Dilated: " , stage1.dilated);
-
         const t1 = performance.now();
         contour = stage2FindBestContour(stage1.dilated);
         if (!contour) return null;
+
+        debugMat("stage 1 Gray: " , stage1.gray);
+        debugMat("stage 1 Normalized: " , stage1.normalized);
+        debugMat("stage 1 Edges: " , stage1.edges);
+        debugMat("stage 1 Dilated: " , stage1.dilated);
+
 
         const t2 = performance.now();
         let corners = stage3ExtractCorners(contour);
